@@ -28,7 +28,7 @@ public:
 		FVertexDeclarationElementList Elements;
 		uint32 Stride = sizeof(FQuadVertex);
 		Elements.Add(FVertexElement(0, STRUCT_OFFSET(FQuadVertex, Position), VET_Float4, 0, Stride));
-		Elements.Add(FVertexElement(1, STRUCT_OFFSET(FQuadVertex, UV), VET_Float2, 1, Stride));
+		Elements.Add(FVertexElement(0, STRUCT_OFFSET(FQuadVertex, UV), VET_Float2, 1, Stride));
 		VertexDeclarationRHI = RHICreateVertexDeclaration(Elements);
 	}
 
@@ -41,7 +41,7 @@ public:
 
 class FMyTestVS : public FGlobalShader
 {
-	DECLARE_EXPORTED_SHADER_TYPE(FMyTestVS, Global, TEXPIXELSHADER_API);
+	DECLARE_SHADER_TYPE(FMyTestVS, Global);
 public:
 	FMyTestVS() {}
 	FMyTestVS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
@@ -62,7 +62,7 @@ public:
 
 class FMyTestPS : public FGlobalShader
 {
-	DECLARE_EXPORTED_SHADER_TYPE(FMyTestPS, Global, TEXPIXELSHADER_API);
+	DECLARE_SHADER_TYPE(FMyTestPS, Global);
 
 public:
 	FMyTestPS() {}

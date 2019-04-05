@@ -13,8 +13,8 @@ ATexShaderMesh::ATexShaderMesh()
 	MeshComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MyShaderMesh"));
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 
-	MeshComp->AttachToComponent(RootComponent, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-
+	//MeshComp->AttachToComponent(RootComponent, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	MeshComp->SetupAttachment(RootComponent);
 }
 
 // Called when the game starts or when spawned

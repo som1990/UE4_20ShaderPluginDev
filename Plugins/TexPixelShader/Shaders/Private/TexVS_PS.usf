@@ -1,17 +1,30 @@
 //Created 2019 Soumitra Goswami. MIT License
 
 #include "/Engine/Private/Common.ush"
+#include "/Engine/Private/ColorUtils.ush"
+
 
 //VertexShader
 void MainVS(
 	in float4 InPosition : ATTRIBUTE0,
 	in float2 InUV : ATTRIBUTE1,
-	out float4 OutPos : SV_POSITION,
-	out float2 OutUV : TEXCOORD0
+    out float2 OutUV : TEXCOORD0,
+	out float4 OutPos : SV_POSITION
+	
 	)
 {
     OutPos = InPosition;
-    OutUV = InUV;
+    OutUV.x = 1.0f-InUV.x;
+    OutUV.y = InUV.y;
+}
+
+MaterialFloat4 ColourTexture2DSample(Texture2D Tex, SamplerState Sampler, float2 UV)
+{
+	MaterialFloat4 Sample = Tex.Sample(Sampler, UV);
+#if SRGB_INPUT_TEXTURE && (FEATURE_LEVEL == FEATURE_LEVEL_ES2) // ES2 does not support sRGB sampling
+	Sample.rgb = Sample.rgb * Sample.rgb;
+#endif
+	return Sample;
 }
 
 float4 MyColor;
@@ -26,7 +39,9 @@ void MainPS(
 {
     float xSize, ySize;
     //TextureParameter.GetDimensions(xSize, ySize);
-    float4 packedValue = TextureParameter.Sample(TexMapSampler,InUV.xy);
-    OutColor = MyColor * (1.0 - PSVariable.BlendFactor) + packedValue * PSVariable.BlendFactor;
-
+   //float4 packedValue = TextureParameter.Sample(TexMapSampler,InUV.xy);
+    float4 packedValue = ColourTexture2DSample(TextureParameter, TexMapSampler, InUV);
+    OutColor = MyColor * (1.0 - PSVariable.BlendFactor) + float4(packedValue.r, packedValue.g, packedValue.b,1.0) * PSVariable.BlendFactor;
+    //OutColor = float4(InUV.x, InUV.y, 0.0f, 1.0f);
 }
+

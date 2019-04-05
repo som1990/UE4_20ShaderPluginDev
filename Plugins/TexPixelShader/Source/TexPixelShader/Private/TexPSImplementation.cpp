@@ -24,14 +24,7 @@ FTexPSImplementation::FTexPSImplementation(FColor StartColor, ERHIFeatureLevel::
 
 	m_startCol = FLinearColor(StartColor.R / 255.0, StartColor.G / 255.0, StartColor.B / 255.0, StartColor.A / 255.0);
 
-	m_pQuadVB[0].Position = FVector4(-1.0f, -1.0f, 0.0f, 1.0f);
-	m_pQuadVB[1].Position = FVector4(-1.0f, 1.0f, 0.0f, 1.0f);
-	m_pQuadVB[2].Position = FVector4(1.0f, -1.0f, 0.0f, 1.0f);
-	m_pQuadVB[3].Position = FVector4(1.0f, 1.0f, 0.0f, 1.0f);
-	m_pQuadVB[0].UV = FVector2D(0, 0);
-	m_pQuadVB[1].UV = FVector2D(1, 0);
-	m_pQuadVB[2].UV = FVector2D(0, 1);
-	m_pQuadVB[3].UV = FVector2D(1, 1);
+	
 }
 
 FTexPSImplementation::~FTexPSImplementation()
@@ -120,6 +113,16 @@ void FTexPSImplementation::ExecutePixelShaderInternal()
 	//TextureParameter is a FTexture2DRHIRef
 	PixelShader->SetParameters(RHICmdList, m_startCol, TextureParameterSRV,TextureParameter);
 	PixelShader->SetUniformBuffers(RHICmdList, VariableParameters);
+
+	m_pQuadVB[0].Position = FVector4(-1.0f, 1.0f, 0.0f, 1.0f);
+	m_pQuadVB[1].Position = FVector4(1.0f, 1.0f, 0.0f, 1.0f);
+	m_pQuadVB[2].Position = FVector4(-1.0f, -1.0f, 0.0f, 1.0f);
+	m_pQuadVB[3].Position = FVector4(1.0f, -1.0f, 0.0f, 1.0f);
+	m_pQuadVB[0].UV = FVector2D(0, 0);
+	m_pQuadVB[1].UV = FVector2D(1, 0);
+	m_pQuadVB[2].UV = FVector2D(0, 1);
+	m_pQuadVB[3].UV = FVector2D(1, 1);
+
 	DrawPrimitiveUP(RHICmdList, PT_TriangleStrip, 2, m_pQuadVB, sizeof(m_pQuadVB[0]));
 
 	PixelShader->UnbindBuffers(RHICmdList);
