@@ -14,12 +14,15 @@ void MainVS(
 	)
 {
     OutPos = InPosition;
-    OutUV.x = 1.0f-InUV.x;
+    OutUV.x = 1.0f-InUV.x;// X axis was inverted for me based on how I layed out my render quad
     OutUV.y = InUV.y;
 }
 
+//Taken from "/Engine/Shaders/Private/SimpleElementPixelShader.usf" 
 MaterialFloat4 ColourTexture2DSample(Texture2D Tex, SamplerState Sampler, float2 UV)
 {
+	//If you want to sample a particular mip level use SampleLevel
+	//If you want raw unfiltered pixel data use Tex.Load
 	MaterialFloat4 Sample = Tex.Sample(Sampler, UV);
 #if SRGB_INPUT_TEXTURE && (FEATURE_LEVEL == FEATURE_LEVEL_ES2) // ES2 does not support sRGB sampling
 	Sample.rgb = Sample.rgb * Sample.rgb;
@@ -38,10 +41,8 @@ void MainPS(
 	)
 {
     float xSize, ySize;
-    //TextureParameter.GetDimensions(xSize, ySize);
-   //float4 packedValue = TextureParameter.Sample(TexMapSampler,InUV.xy);
     float4 packedValue = ColourTexture2DSample(TextureParameter, TexMapSampler, InUV);
     OutColor = MyColor * (1.0 - PSVariable.BlendFactor) + float4(packedValue.r, packedValue.g, packedValue.b,1.0) * PSVariable.BlendFactor;
-    //OutColor = float4(InUV.x, InUV.y, 0.0f, 1.0f);
+    //OutColor = float4(InUV.x, InUV.y, 0.0f, 1.0f); //Testing to see if UVs are imported correctly
 }
 
