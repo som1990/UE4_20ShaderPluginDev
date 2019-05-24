@@ -8,7 +8,7 @@ public class PluginTest : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "RHI", "TexPixelShader" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "RHI", "TexPixelShader", "ComputeTest" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {});
 

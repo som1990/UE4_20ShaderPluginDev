@@ -35,7 +35,12 @@ public:
 	FVector CurrentVelocity;
 
 	FVector RayDirection;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category ="Variables")
 	float TraceDistance;
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Variables")
+	float u;
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Variables")
+	float v;
 
 	UPROPERTY(EditAnywhere, Category = Shader)
 	class AActor* TextureMesh;

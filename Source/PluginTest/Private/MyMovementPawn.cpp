@@ -23,6 +23,7 @@ AMyMovementPawn::AMyMovementPawn()
 	SphereVisual->SetupAttachment(RootComponent);
 	RayDirection = FVector(0.0f, 0.0f, -1.0f);
 	TraceDistance = 500.0f;
+	u = v = 0.0f;
 }
 
 // Called when the game starts or when spawned
@@ -70,11 +71,11 @@ void AMyMovementPawn::Tick(float DeltaTime)
 				UMaterialInterface* MaterialAttached = OutHit.GetComponent()->GetMaterial(0);
 				UMaterialInstanceDynamic* MID = OutHit.GetComponent()->CreateDynamicMaterialInstance(0, OutHit.GetComponent()->GetMaterial(0));
 				MID->SetVectorParameterValue("UV", FLinearColor(outUV.X, outUV.Y, 0.0f, 0.0f));
-				
+				u = outUV.X;
+				v = outUV.Y;
 			}
 		}
 	}
-
 
 }
 
