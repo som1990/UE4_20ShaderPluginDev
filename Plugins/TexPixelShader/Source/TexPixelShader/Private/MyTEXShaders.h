@@ -3,6 +3,8 @@
 #include "GlobalShader.h"
 #include "UniformBuffer.h"
 #include "RHICommandList.h"
+#include "ShaderParameterUtils.h"
+#include "RHIStaticStates.h"
 
 BEGIN_UNIFORM_BUFFER_STRUCT(FPixelShaderVariableParameters, )
 UNIFORM_MEMBER(float, BlendFactor)

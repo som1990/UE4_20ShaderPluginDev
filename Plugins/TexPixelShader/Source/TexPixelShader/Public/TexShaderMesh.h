@@ -8,7 +8,7 @@
 #include "TexShaderMesh.generated.h"
 
 UCLASS()
-class PLUGINTEST_API ATexShaderMesh : public AActor
+class ATexShaderMesh : public AActor
 {
 	GENERATED_BODY()
 	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)

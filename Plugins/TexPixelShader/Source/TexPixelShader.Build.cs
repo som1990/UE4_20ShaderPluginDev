@@ -6,6 +6,8 @@ namespace UnrealBuildTool.Rules
     {
         public TexPixelShader(ReadOnlyTargetRules Target): base(Target)
         {
+            PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+            PrivatePCHHeaderFile = "TexPixelShader/Private/TexPixelShaderPrivatePCH.h";
 
             PublicIncludePaths.AddRange(
                 new string[]

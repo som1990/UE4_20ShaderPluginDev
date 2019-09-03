@@ -1,6 +1,6 @@
+#include "MyTEXShaders.h"
 #include "TexPixelShaderPrivatePCH.h"
-#include "ShaderParameterUtils.h"
-#include "RHIStaticStates.h"
+
 
 IMPLEMENT_UNIFORM_BUFFER_STRUCT(FPixelShaderVariableParameters, TEXT("PSVariable"))
 

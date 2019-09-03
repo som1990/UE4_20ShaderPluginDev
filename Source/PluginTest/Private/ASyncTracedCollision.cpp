@@ -67,19 +67,18 @@ void AASyncTracedCollision::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	if (LastTraceHandle._Data.FrameNumber != 0)
 	{
+		GEngine->AddOnScreenDebugMessage(-1, 0.5f, FColor::Blue, TEXT("I have entered"));
 		FTraceDatum OutData;
 		if (GetWorld()->QueryTraceData(LastTraceHandle, OutData))
 		{
 			LastTraceHandle._Data.FrameNumber = 0;
 			ImplementTraceResults(OutData);
 		}
-
-		if (bWantsTrace)
-		{
-			LastTraceHandle = RequestTrace();
-			bWantsTrace = false;
-		}
 	}
-
+	if (bWantsTrace)
+	{
+		LastTraceHandle = RequestTrace();
+		bWantsTrace = false;
+	}
 }
 
