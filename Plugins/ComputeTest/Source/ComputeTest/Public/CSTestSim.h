@@ -4,7 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "ComputeTest.h"
 #include "CSTestSim.generated.h"
+
 
 UCLASS()
 class ACSTestSim : public AActor

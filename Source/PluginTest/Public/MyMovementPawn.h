@@ -10,8 +10,8 @@ UCLASS()
 class PLUGINTEST_API AMyMovementPawn : public APawn
 {
 	GENERATED_BODY()
-		UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
-		class UStaticMeshComponent* SphereVisual;
+	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
+	class UStaticMeshComponent* SphereVisual;
 public:
 	// Sets default values for this pawn's properties
 	AMyMovementPawn();

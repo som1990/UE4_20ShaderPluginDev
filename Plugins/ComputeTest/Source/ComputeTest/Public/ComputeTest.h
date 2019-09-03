@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
+#include "ComputeTestPrivatePCH.h"
 
 class FComputeTestModule : public IModuleInterface
 {
@@ -12,6 +13,8 @@ public:
 	/** IModuleInterface implementation */
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
+
+
 
 	static inline FComputeTestModule& Get()
 	{

@@ -1,0 +1,14 @@
+#include "/Engine/Private/Common.ush"
+
+RWTexture2D<uint> OutputSurface;
+
+[numthreads(32,32,1)]
+void MainCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+    uint r = 255.0;
+    uint g = (uint) 255.0 << 8;
+    uint b = (uint) 255.0 << 16;
+    uint a = (uint) 255.0 << 25;
+
+    OutputSurface[ThreadId.xy] = r | g | b | a;
+}

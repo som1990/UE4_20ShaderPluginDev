@@ -20,6 +20,7 @@ void ACSTestSim::BeginPlay()
 
 FString ACSTestSim::PrintUV(float u, float v) const
 {
+	
 	return FString::Printf(TEXT("Hello World: %f, %f"), u, v);
 }
 
