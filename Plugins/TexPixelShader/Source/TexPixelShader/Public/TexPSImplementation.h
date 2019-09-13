@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "Engine.h"
 #include "../Private/MyTEXShaders.h"
 
 /**
@@ -28,7 +29,7 @@ public:
 		bSave = true;
 	}
 
-private:
+protected:
 	bool bIsPixelShaderExecuting;
 	bool bMustRegenerateSRV;
 	bool bisUnloading;

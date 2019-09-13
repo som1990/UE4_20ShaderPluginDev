@@ -11,7 +11,7 @@ AASyncTracedCollision::AASyncTracedCollision()
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 	MeshComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MyGridMesh"));
-	RootComponent = CreateAbstractDefaultSubobject<USceneComponent>(TEXT("Root"));
+	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	MeshComp->SetupAttachment(RootComponent);
 }
 
@@ -41,8 +41,8 @@ FTraceHandle AASyncTracedCollision::RequestTrace()
 	auto objectParams = FCollisionObjectQueryParams(ECC_Pawn);
 	auto Params = FCollisionQueryParams(FName(TEXT("AsyncRequestTrace")), bTraceComplex,this);
 
-	FVector Start = GetActorLocation();
-	FVector End = Start + FVector(0.f, 500.f, 0.f);
+	FVector Start = GetActorLocation() + FVector(0.f, 0.0f, 1.f);
+	FVector End = Start + FVector(0.f, 0.0f, 500.f);
 	return World->AsyncLineTraceByObjectType(EAsyncTraceType::Multi, Start, End, objectParams, Params, &TraceDelegate);
 }
 
@@ -56,7 +56,7 @@ void AASyncTracedCollision::OnTraceCompleted(const FTraceHandle& Handle, FTraceD
 void AASyncTracedCollision::ImplementTraceResults(const FTraceDatum& TraceData)
 {
 	int numHits = TraceData.OutHits.Num();
-	GEngine->AddOnScreenDebugMessage(-1, 0.5f, FColor::Yellow, TEXT("Num Hits: ") + FString::FromInt(numHits));
+	//GEngine->AddOnScreenDebugMessage(-1, 0.5f, FColor::Yellow, TEXT("Num Hits: ") + FString::FromInt(numHits));
 
 	RecieveOnTraceCompleted(TraceData.OutHits);
 }
@@ -67,7 +67,7 @@ void AASyncTracedCollision::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	if (LastTraceHandle._Data.FrameNumber != 0)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 0.5f, FColor::Blue, TEXT("I have entered"));
+		
 		FTraceDatum OutData;
 		if (GetWorld()->QueryTraceData(LastTraceHandle, OutData))
 		{

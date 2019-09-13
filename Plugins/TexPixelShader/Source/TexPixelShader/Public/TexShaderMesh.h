@@ -28,7 +28,6 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-protected:
 	virtual void SetupMyPlayerInputComponent(UInputComponent* InputComponent);
 
 public:
@@ -45,7 +44,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = ShaderDemo)
 		UTextureRenderTarget2D* RenderTarget;
 
-private:
+protected:
 	FTexPSImplementation* TexPixelShading;
 	
 	void SavePixelShaderOutput();

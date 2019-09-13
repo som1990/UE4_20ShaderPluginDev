@@ -51,10 +51,9 @@ void FTexPSImplementation::ExecutePixelShader(UTextureRenderTarget2D* RenderTarg
 	CurrentRenderTarget = RenderTarget;
 	TextureParameter = InputTexture;
 	m_startCol = FLinearColor(InputColor.R / 255.0, InputColor.G / 255.0, InputColor.B / 255.0, InputColor.A / 255.0);
-	
-	ENQUEUE_UNIQUE_RENDER_COMMAND_ONEPARAMETER(
-		FPixelShaderRunner,
-		FTexPSImplementation*, MyShader, this,
+	FTexPSImplementation* MyShader = this;
+	ENQUEUE_RENDER_COMMAND(FPixelShaderRunner)(
+		[MyShader](FRHICommandListImmediate& RHICmdList)
 		{
 			MyShader->ExecutePixelShaderInternal();
 		}
