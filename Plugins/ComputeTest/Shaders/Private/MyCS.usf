@@ -1,14 +1,25 @@
 #include "/Engine/Private/Common.ush"
 
-RWTexture2D<uint> OutputSurface;
+#define SRCTYPE float4
+#define DSTTYPE float4
+
+#define Texture2DType Texture2D<SRCTYPE>
+#define RWTexture2DType RWTexture2D<DSTTYPE>
+
+float4 MyColor;
+RWTexture2DType OutputSurface;
+
+Texture2DType SrcTexture;
+SamplerState TexMapSampler;
 
 [numthreads(32,32,1)]
 void MainCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-    uint r = 255.0;
-    uint g = (uint) 255.0 << 8;
-    uint b = (uint) 255.0 << 16;
-    uint a = (uint) 255.0 << 25;
+    float4 dstpixel = MyColor;
+    float width, height;
+    SrcTexture.GetDimensions(width, height);
+    float2 uv = float2(ThreadId.xy)/ float2(width, height);
+    OutputSurface[ThreadId.xy] = SrcTexture.SampleLevel(TexMapSampler, uv,0);
 
-    OutputSurface[ThreadId.xy] = r | g | b | a;
+    return;
 }

@@ -23,13 +23,16 @@ AMyMovementPawn::AMyMovementPawn()
 	SphereVisual->SetupAttachment(RootComponent);
 	RayDirection = FVector(0.0f, 0.0f, -1.0f);
 	TraceDistance = 500.0f;
-	u = v = 0.0f;
+	prevU = prevV = u = v = 0.0f;
+	mag = 0.f;
+	speed = 100.0f;
 }
 
 // Called when the game starts or when spawned
 void AMyMovementPawn::BeginPlay()
 {
 	Super::BeginPlay();
+	FirstHit = true;
 	
 }
 
@@ -58,7 +61,8 @@ void AMyMovementPawn::Tick(float DeltaTime)
 		//FCollisionQueryParams CollisionParams;
 		//CollisionParams.bTraceComplex = true;
 		//CollisionParams.AddIgnoredActor(this);
-		TArray<AActor*>IgnoreActor; 
+		TArray<AActor*>IgnoreActor;
+		IgnoreActor.Add(this);
 		//bool hit = GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, CollisionParams);
 		bool hit = UKismetSystemLibrary::LineTraceSingle(GetWorld(), Start, End, ETraceTypeQuery::TraceTypeQuery1, true, IgnoreActor, EDrawDebugTrace::ForDuration, OutHit, true);
 
@@ -71,9 +75,32 @@ void AMyMovementPawn::Tick(float DeltaTime)
 				UMaterialInterface* MaterialAttached = OutHit.GetComponent()->GetMaterial(0);
 				UMaterialInstanceDynamic* MID = OutHit.GetComponent()->CreateDynamicMaterialInstance(0, OutHit.GetComponent()->GetMaterial(0));
 				MID->SetVectorParameterValue("UV", FLinearColor(outUV.X, outUV.Y, 0.0f, 0.0f));
+				if (FirstHit)
+				{
+					prevU = outUV.X;
+					prevV = outUV.Y;
+					FirstHit = false;
+				}
 				u = outUV.X;
 				v = outUV.Y;
+				
+				float uDiff = u - prevU;
+				float vDiff = v - prevV;
+				mag = FVector2D(uDiff, vDiff).Size();
+				prevU = u;
+				prevV = v;
+				//GEngine->AddOnScreenDebugMessage(-1, 0.1f, FColor::Blue, TEXT("Mag: ") + FString::SanitizeFloat(mag));
 			}
+			else
+			{
+				FirstHit = true;
+				mag = 0;
+			}
+		}
+		else
+		{
+			FirstHit = true;
+			mag = 0;
 		}
 	}
 
@@ -91,11 +118,11 @@ void AMyMovementPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 
 void AMyMovementPawn::MoveForward(float AxisValue)
 {
-	CurrentVelocity.X = FMath::Clamp(AxisValue, -1.0f, 1.0f) * 100.0f;
+	CurrentVelocity.X = FMath::Clamp(AxisValue, -1.0f, 1.0f) * speed;
 }
 
 void AMyMovementPawn::MoveRight(float AxisValue)
 {
-	CurrentVelocity.Y = FMath::Clamp(AxisValue, -1.0f, 1.0f) * 100.0f;
+	CurrentVelocity.Y = FMath::Clamp(AxisValue, -1.0f, 1.0f) * speed;
 }
 

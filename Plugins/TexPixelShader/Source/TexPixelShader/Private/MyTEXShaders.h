@@ -118,12 +118,12 @@ public:
 
 	void UnbindBuffers(FRHICommandList& RHICmdList)
 	{
-		/*FPixelShaderRHIParamRef PixelShaderRHI = GetPixelShader();
+		FPixelShaderRHIParamRef PixelShaderRHI = GetPixelShader();
 		if (TextureParameter.IsBound())
 		{
 			RHICmdList.SetShaderResourceViewParameter(PixelShaderRHI,
 				TextureParameter.GetBaseIndex(), FShaderResourceViewRHIRef());
-		}*/
+		}
 	
 	}
 

@@ -26,3 +26,4 @@ public:
 		return FModuleManager::Get().IsModuleLoaded("ComputeTest");
 	}
 };
+

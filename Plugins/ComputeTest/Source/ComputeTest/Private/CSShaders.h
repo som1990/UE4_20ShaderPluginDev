@@ -21,10 +21,13 @@ class FRenderUVCS : public FGlobalShader
 
 public:
 	FRenderUVCS() {}
-	FRenderUVCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer) : FGlobalShader(Initializer)
+	FRenderUVCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer) : 
+		FGlobalShader(Initializer)
 	{
 		MyColorParameter.Bind(Initializer.ParameterMap, TEXT("MyColor"));
 		OutputSurface.Bind(Initializer.ParameterMap, TEXT("OutputSurface"));
+		TextureParameter.Bind(Initializer.ParameterMap, TEXT("SrcTexture"));
+		TexMapSampler.Bind(Initializer.ParameterMap, TEXT("TexMapSampler"));
 	}
 
 	static bool ShouldCache(EShaderPlatform Platform)
@@ -36,16 +39,29 @@ public:
 	{
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.CompilerFlags.Add(CFLAG_StandardOptimization);
+		OutEnvironment.SetDefine(TEXT("THREADS_PER_GROUP"), FRenderUVCS::NumThreadsPerGroup());
 	}
+
+	static int32 NumThreadsPerGroup() {return 32;}
 
 	void SetParameters(
 		FRHICommandList& RHICmdList,
-		const FLinearColor& Color
+		const FLinearColor& Color,
+		FShaderResourceViewRHIParamRef TextureParameterSRV,
+		FTextureRHIParamRef InputTextureRef
 		)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
 
 		SetShaderValue(RHICmdList, ComputeShaderRHI, MyColorParameter, Color);
+
+		if (TextureParameter.IsBound())
+		{
+			FSamplerStateRHIParamRef SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+
+			SetSamplerParameter(RHICmdList, ComputeShaderRHI, TexMapSampler, SamplerStateLinear);
+			SetTextureParameter(RHICmdList, ComputeShaderRHI, TextureParameter, InputTextureRef);
+		}
 	}
 
 	void SetOutput(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIRef OutputSurfaceUAV)
@@ -58,16 +74,21 @@ public:
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParams = FGlobalShader::Serialize(Ar);
-		Ar << MyColorParameter << OutputSurface;
+		Ar << MyColorParameter << OutputSurface 
+			<< TextureParameter << TexMapSampler;
 		return bShaderHasOutdatedParams;
 	}
 	void SetUniformBuffers(FRHICommandList& RHICmdList, FComputeShaderVariableParameters& VariableParameters)
 	{
 		FComputeShaderVariableParameterRef VariableParametersBuffer;
 
-		VariableParametersBuffer = FComputeShaderVariableParameterRef::CreateUniformBufferImmediate(VariableParameters, UniformBuffer_SingleDraw);
+		VariableParametersBuffer = 
+			FComputeShaderVariableParameterRef::CreateUniformBufferImmediate(
+				VariableParameters, UniformBuffer_SingleDraw);
 
-		SetUniformBufferParameter(RHICmdList, GetComputeShader(), GetUniformBufferParameter<FComputeShaderVariableParameters>(), VariableParametersBuffer);
+		SetUniformBufferParameter(RHICmdList, GetComputeShader(), 
+			GetUniformBufferParameter<FComputeShaderVariableParameters>(), 
+			VariableParametersBuffer);
 	}
 
 	void UnbindBuffers(FRHICommandList& RHICmdList)
@@ -75,7 +96,14 @@ public:
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
 		if (OutputSurface.IsBound())
 		{
-			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputSurface.GetBaseIndex(), FUnorderedAccessViewRHIParamRef());
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, 
+				OutputSurface.GetBaseIndex(), FUnorderedAccessViewRHIParamRef());
+		}
+
+		if (TextureParameter.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
+				TextureParameter.GetBaseIndex(), FShaderResourceViewRHIRef());
 		}
 	}
 
@@ -86,6 +114,10 @@ public:
 	
 private:
 	FShaderParameter MyColorParameter;
+	
+	FShaderResourceParameter TextureParameter;
+	FShaderResourceParameter TexMapSampler;
+
 	FShaderResourceParameter OutputSurface;
 	
 };
@@ -145,6 +177,7 @@ public:
 		:FGlobalShader(Initializer)
 	{
 		TextureParameter.Bind(Initializer.ParameterMap, TEXT("TextureParameter"));
+		TexMapSampler.Bind(Initializer.ParameterMap, TEXT("TexMapSampler"));
 	}
 	
 	void SetParameters(
@@ -159,9 +192,20 @@ public:
 		}
 
 		FSamplerStateRHIParamRef SamperStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
-		//SetSamplerParameter(RHICmdList, PixelShaderRHI, TexMapSampler, SamperStateLinear);
+		SetSamplerParameter(RHICmdList, PixelShaderRHI, TexMapSampler, SamperStateLinear);
 		
 	}
+
+	void UnbindBuffers(FRHICommandList& RHICmdList)
+	{
+		FPixelShaderRHIParamRef PixelShaderRHI = GetPixelShader();
+		if (TextureParameter.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(PixelShaderRHI,
+				TextureParameter.GetBaseIndex(), FShaderResourceViewRHIRef());
+		}
+	}
+
 	static bool ShouldCache(EShaderPlatform Platform)
 	{
 		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
@@ -170,6 +214,7 @@ public:
 	virtual bool Serialize(FArchive &Ar) override 
 	{
 		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << TextureParameter << TexMapSampler;
 		return bShaderHasOutdatedParameters;
 	}
 

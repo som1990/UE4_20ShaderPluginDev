@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine.h"
 #include "GameFramework/Pawn.h"
 #include "MyMovementPawn.generated.h"
 
@@ -21,6 +22,8 @@ protected:
 	virtual void BeginPlay() override;
 
 	virtual void BeginDestroy() override;
+	bool FirstHit = true;
+	float prevU, prevV;
 
 public:
 	// Called every frame
@@ -37,11 +40,15 @@ public:
 	FVector RayDirection;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category ="Variables")
 	float TraceDistance;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Variables")
+	float speed;
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Variables")
 	float u;
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Variables")
 	float v;
-
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Variables")
+	float mag;
+	
 	UPROPERTY(EditAnywhere, Category = Shader)
 	class AActor* TextureMesh;
 };
