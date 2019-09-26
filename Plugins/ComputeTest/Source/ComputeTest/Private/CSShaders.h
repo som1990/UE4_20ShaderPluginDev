@@ -15,13 +15,13 @@ END_UNIFORM_BUFFER_STRUCT(FComputeShaderVariableParameters)
 typedef TUniformBufferRef<FComputeShaderVariableParameters> FComputeShaderVariableParameterRef;
 
 
-class FRenderUVCS : public FGlobalShader
+class FAddSourceHeightCS : public FGlobalShader
 {
-	DECLARE_SHADER_TYPE(FRenderUVCS, Global);
+	DECLARE_SHADER_TYPE(FAddSourceHeightCS, Global);
 
 public:
-	FRenderUVCS() {}
-	FRenderUVCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer) : 
+	FAddSourceHeightCS() {}
+	FAddSourceHeightCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer) : 
 		FGlobalShader(Initializer)
 	{
 		MyColorParameter.Bind(Initializer.ParameterMap, TEXT("MyColor"));
@@ -39,7 +39,8 @@ public:
 	{
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.CompilerFlags.Add(CFLAG_StandardOptimization);
-		OutEnvironment.SetDefine(TEXT("THREADS_PER_GROUP"), FRenderUVCS::NumThreadsPerGroup());
+		OutEnvironment.SetDefine(TEXT("ADD_SOURCE_HEIGHTFIELD"), 1);
+		OutEnvironment.SetDefine(TEXT("THREADS_PER_GROUP"), FAddSourceHeightCS::NumThreadsPerGroup());
 	}
 
 	static int32 NumThreadsPerGroup() {return 32;}

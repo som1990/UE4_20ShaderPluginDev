@@ -13,7 +13,6 @@ ACSTestSim::ACSTestSim()
 	texSizeX = texSizeY = 0;
 	bIsTextureGeneratingExecuting = false;
 	bIsTextureDimensionsSet = false;
-	OutputTexture = NULL;
 	InputTexture = NULL;
 	Texture2Display = NULL;
 }
@@ -22,7 +21,7 @@ ACSTestSim::ACSTestSim()
 void ACSTestSim::BeginPlay()
 {
 	Super::BeginPlay();
-	testComputeShader = new FComputeTestExecute(GetWorld()->Scene->GetFeatureLevel());
+	testComputeShader = new FComputeTestExecute(512, 512, GetWorld()->Scene->GetFeatureLevel());
 	
 }
 
@@ -42,11 +41,6 @@ void ACSTestSim::BeginDestroy()
 	{
 		Texture2Display->ConditionalBeginDestroy();
 		Texture2Display = NULL;
-	}
-	if (OutputTexture)
-	{
-		OutputTexture.SafeRelease();
-		OutputTexture = NULL;
 	}
 
 }
@@ -68,27 +62,18 @@ void ACSTestSim::LoadHeightMapSource(float _magnitude, UTexture2D* SourceMap, FC
 	//GEngine->AddOnScreenDebugMessage(-1, 0.2, FColor::Yellow, TEXT("Magnitude: ") + FString::SanitizeFloat(_magnitude));
 	if (InputTexture != NULL)
 	{
-		
 		InputTexture.SafeRelease();
 		InputTexture = NULL;
-		UE_LOG(ComputeLog, Warning, TEXT("InputTexture Reset. Returning"));
+		UE_LOG(ComputeLog, Warning, TEXT("InputTexture Reset."));
 	}
-	if (OutputTexture != NULL)
-	{
-		OutputTexture.SafeRelease();
-		OutputTexture = NULL;
-	}
-
-	FRHIResourceCreateInfo createInfo;
-	OutputTexture = RHICreateTexture2D(texSizeX, texSizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createInfo);
-
+	
 	if (SourceMap)
 	{
 		InputTexture = static_cast<FTexture2DResource*>(SourceMap->Resource)->GetTexture2DRHI();
 		UE_LOG(ComputeLog, Warning, TEXT("RHITexture2D Extracted, Dimensions: %d, %d"), SourceMap->GetSizeX(), SourceMap->GetSizeY());
-		testComputeShader->ExecuteComputeShader(InputTexture, OutputTexture, DisplayColor);
+		testComputeShader->ExecuteComputeShader(InputTexture, DisplayColor);
 		UE_LOG(ComputeLog, Warning, TEXT("Shader Computed."));
-		return;
+		
 	}
 	
 }
@@ -114,7 +99,7 @@ void ACSTestSim::GeneratePreviewTexture(UTexture2D* &OutTexture)
  	OutTexture = Texture2Display;
 }
 
-void ACSTestSim::setOutputDimensions(int xSize, int ySize)
+void ACSTestSim::setOutputDimensions(int32 xSize, int32 ySize)
 {
 	bIsTextureDimensionsSet = false;
 	
@@ -125,14 +110,8 @@ void ACSTestSim::setOutputDimensions(int xSize, int ySize)
 		return;
 	}
 	
-	if (OutputTexture != NULL)
-	{
-		OutputTexture.SafeRelease();
-		OutputTexture = NULL;
-	}
 	
-	FRHIResourceCreateInfo createInfo;
-	OutputTexture = RHICreateTexture2D(xSize, ySize, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createInfo);
+	//testComputeShader = new FComputeTestExecute(xSize, ySize, GetWorld()->Scene->GetFeatureLevel());
 	texSizeX = xSize;
 	texSizeY = ySize;
 	UE_LOG(ComputeLog, Warning, TEXT("OutTexture Extracted, Dimensions: %d, %d"), xSize, ySize);

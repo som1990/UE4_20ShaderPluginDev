@@ -5,10 +5,10 @@
 class COMPUTETEST_API FComputeTestExecute
 {
 public:
-	FComputeTestExecute(ERHIFeatureLevel::Type ShaderFeatureLevel);
+	FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLevel::Type ShaderFeatureLevel);
 	~FComputeTestExecute();
 
-	void ExecuteComputeShader(FTexture2DRHIRef _InTexture, FTexture2DRHIRef _OutputTexture, FColor DisplayColor);
+	void ExecuteComputeShader(FTexture2DRHIRef _InTexture, FColor DisplayColor);
 
 	void ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList);
 

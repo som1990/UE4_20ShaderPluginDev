@@ -31,7 +31,7 @@ protected:
 	UFUNCTION(BlueprintCallable, Category = "SGPlugin|PreviewTexture")
 	void GeneratePreviewTexture(UTexture2D* &OutTexture);
 	UFUNCTION(BlueprintCallable, Category = "SGPlugin|TexInitialization")
-	void setOutputDimensions(int xSize, int ySize);
+	void setOutputDimensions(int32 xSize, int32 ySize);
 
 	void RHIRef2Texture2D(FTexture2DRHIRef rhiTexture, UTexture2D* OutTexture);
 
@@ -44,7 +44,6 @@ protected:
 	int texSizeX, texSizeY;
 	FComputeTestExecute* testComputeShader;
 	FTexture2DRHIRef InputTexture;
-	FTexture2DRHIRef OutputTexture;
 	UTexture2D* Texture2Display;
 	
 	bool bIsTextureGeneratingExecuting;

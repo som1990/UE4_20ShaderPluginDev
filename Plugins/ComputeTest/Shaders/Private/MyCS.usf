@@ -1,5 +1,7 @@
 #include "/Engine/Private/Common.ush"
 
+#ifdef ADD_SOURCE_HEIGHTFIELD
+
 #define SRCTYPE float4
 #define DSTTYPE float4
 
@@ -12,14 +14,19 @@ RWTexture2DType OutputSurface;
 Texture2DType SrcTexture;
 SamplerState TexMapSampler;
 
-[numthreads(32,32,1)]
-void MainCS(uint3 ThreadId : SV_DispatchThreadID)
+[numthreads(THREADS_PER_GROUP,THREADS_PER_GROUP,1)]
+void AddSourceHeightCS(uint3 ThreadId : SV_DispatchThreadID)
 {
     float4 dstpixel = MyColor;
+    //float4 curPixel = OutputSurface[ThreadId.xy];
     float width, height;
     SrcTexture.GetDimensions(width, height);
     float2 uv = float2(ThreadId.xy)/ float2(width, height);
-    OutputSurface[ThreadId.xy] = SrcTexture.SampleLevel(TexMapSampler, uv,0);
+    float4 output = SrcTexture[ThreadId.xy];//SrcTexture.SampleLevel(TexMapSampler, uv,0);
+    float4 pixColor = float4(output.x,0.0f,0.0f,0.0f);
+    OutputSurface[ThreadId.xy] = pixColor; //SrcTexture.SampleLevel(TexMapSampler, uv,0);
 
     return;
 }
+
+#endif //ADD_SOURCE_HEIGHTFIELD

@@ -6,7 +6,7 @@
 #define NUM_THREADS_PER_GROUP 32
 DECLARE_LOG_CATEGORY_EXTERN(InternalShaderLog, Log, All);
 DEFINE_LOG_CATEGORY(InternalShaderLog);
-FComputeTestExecute::FComputeTestExecute(ERHIFeatureLevel::Type ShaderFeatureLevel)
+FComputeTestExecute::FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLevel::Type ShaderFeatureLevel)
 {
 	FeatureLevel = ShaderFeatureLevel;
 	bIsUnloading = false;
@@ -14,12 +14,11 @@ FComputeTestExecute::FComputeTestExecute(ERHIFeatureLevel::Type ShaderFeatureLev
 	bMustRegenerateUAV = false;
 	bMustRegenerateSRV = false;
 
-	FRHIResourceCreateInfo CreateInfo;
-	Texture = NULL;
-	TextureUAV = NULL;
 	InputTexture = NULL;
 	InTextureSRV = NULL;
-
+	FRHIResourceCreateInfo createInfo;
+	Texture = RHICreateTexture2D(sizeX, sizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createInfo);
+	TextureUAV = RHICreateUnorderedAccessView(Texture);
 }
 
 FComputeTestExecute::~FComputeTestExecute()
@@ -27,23 +26,19 @@ FComputeTestExecute::~FComputeTestExecute()
 	bIsUnloading = true;
 }
 
-void FComputeTestExecute::ExecuteComputeShader(FTexture2DRHIRef _InTexture, FTexture2DRHIRef _OutputTexture, FColor DisplayColor)
+void FComputeTestExecute::ExecuteComputeShader(FTexture2DRHIRef _InTexture, FColor DisplayColor)
 {
 	check(IsInGameThread());
 
 	if (bIsUnloading || bIsComputeShaderExecuting)
 		return;
 	bIsComputeShaderExecuting = true;
-	if (Texture != _OutputTexture)
-	{
-		bMustRegenerateUAV = true;
-	}
 	if (InputTexture != _InTexture)
 	{
 		bMustRegenerateSRV = true;
 	}
 
-	Texture = _OutputTexture;
+	
 	InputTexture = _InTexture;
 	inColor = FLinearColor(DisplayColor.R / 255.0, DisplayColor.G / 255.0, DisplayColor.B / 255.0, DisplayColor.A / 255.0);
 	UE_LOG(InternalShaderLog, Warning, TEXT("Shader Variables Initialized"));
@@ -77,18 +72,6 @@ void FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate&
 		return;
 	}
 
-	if (bMustRegenerateUAV)
-	{
-		bMustRegenerateUAV = false;
-
-		if (NULL != TextureUAV)
-		{
-			TextureUAV.SafeRelease();
-			TextureUAV = NULL;
-		}
-		
-		TextureUAV = RHICreateUnorderedAccessView(Texture);
-	}
 
 	if (bMustRegenerateSRV)
 	{
@@ -102,7 +85,7 @@ void FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate&
 		InTextureSRV = RHICreateShaderResourceView(InputTexture, 0);
 	}
 
-	TShaderMapRef<FRenderUVCS> ComputeShader(GetGlobalShaderMap(FeatureLevel));
+	TShaderMapRef<FAddSourceHeightCS> ComputeShader(GetGlobalShaderMap(FeatureLevel));
 	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
 
 	ComputeShader->SetParameters(RHICmdList, inColor, InTextureSRV, InputTexture);
