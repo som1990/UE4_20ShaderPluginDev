@@ -8,8 +8,8 @@
 
 
 BEGIN_UNIFORM_BUFFER_STRUCT(FComputeShaderVariableParameters, )
-UNIFORM_MEMBER(float, inputU)
-UNIFORM_MEMBER(float, inputV)
+UNIFORM_MEMBER(float, mag)
+UNIFORM_MEMBER(float, deltaTime)
 END_UNIFORM_BUFFER_STRUCT(FComputeShaderVariableParameters)
 
 typedef TUniformBufferRef<FComputeShaderVariableParameters> FComputeShaderVariableParameterRef;
@@ -28,6 +28,7 @@ public:
 		OutputSurface.Bind(Initializer.ParameterMap, TEXT("OutputSurface"));
 		TextureParameter.Bind(Initializer.ParameterMap, TEXT("SrcTexture"));
 		TexMapSampler.Bind(Initializer.ParameterMap, TEXT("TexMapSampler"));
+		H0_phi0_RW.Bind(Initializer.ParameterMap, TEXT("h0_phi_RW"));
 	}
 
 	static bool ShouldCache(EShaderPlatform Platform)
@@ -50,12 +51,12 @@ public:
 		const FLinearColor& Color,
 		FShaderResourceViewRHIParamRef TextureParameterSRV,
 		FTextureRHIParamRef InputTextureRef
+		
 		)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
 
 		SetShaderValue(RHICmdList, ComputeShaderRHI, MyColorParameter, Color);
-
 		if (TextureParameter.IsBound())
 		{
 			FSamplerStateRHIParamRef SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
@@ -65,20 +66,24 @@ public:
 		}
 	}
 
-	void SetOutput(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIRef OutputSurfaceUAV)
+	void SetOutput(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIRef OutputSurfaceUAV, FUnorderedAccessViewRHIParamRef Ht0_phi_UAV)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
 
 		if (OutputSurface.IsBound())
 			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputSurface.GetBaseIndex(), OutputSurfaceUAV);
+		if (H0_phi0_RW.IsBound())
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, H0_phi0_RW.GetBaseIndex(), Ht0_phi_UAV);
 	}
+
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParams = FGlobalShader::Serialize(Ar);
 		Ar << MyColorParameter << OutputSurface 
-			<< TextureParameter << TexMapSampler;
+			<< TextureParameter << TexMapSampler << H0_phi0_RW;
 		return bShaderHasOutdatedParams;
 	}
+
 	void SetUniformBuffers(FRHICommandList& RHICmdList, FComputeShaderVariableParameters& VariableParameters)
 	{
 		FComputeShaderVariableParameterRef VariableParametersBuffer;
@@ -101,6 +106,12 @@ public:
 				OutputSurface.GetBaseIndex(), FUnorderedAccessViewRHIParamRef());
 		}
 
+		if (H0_phi0_RW.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI,
+				H0_phi0_RW.GetBaseIndex(), FUnorderedAccessViewRHIParamRef());
+		}
+
 		if (TextureParameter.IsBound())
 		{
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
@@ -115,11 +126,12 @@ public:
 	
 private:
 	FShaderParameter MyColorParameter;
-	
+	FShaderResourceParameter OutputSurface;
+
 	FShaderResourceParameter TextureParameter;
 	FShaderResourceParameter TexMapSampler;
-
-	FShaderResourceParameter OutputSurface;
+	FShaderResourceParameter H0_phi0_RW;
+	
 	
 };
 

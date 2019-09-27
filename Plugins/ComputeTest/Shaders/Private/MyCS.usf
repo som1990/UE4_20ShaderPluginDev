@@ -13,18 +13,23 @@ RWTexture2DType OutputSurface;
 
 Texture2DType SrcTexture;
 SamplerState TexMapSampler;
+RWStructuredBuffer<float4> h0_phi_RW;
 
+
+//THREADS_PER_GROUP defined in "ComputeTestImplementation.cpp"
 [numthreads(THREADS_PER_GROUP,THREADS_PER_GROUP,1)]
 void AddSourceHeightCS(uint3 ThreadId : SV_DispatchThreadID)
 {
     float4 dstpixel = MyColor;
-    //float4 curPixel = OutputSurface[ThreadId.xy];
+    
     float width, height;
     SrcTexture.GetDimensions(width, height);
+    int idx = ThreadId.x  + ThreadId.y * width;
     float2 uv = float2(ThreadId.xy)/ float2(width, height);
     float4 output = SrcTexture[ThreadId.xy];//SrcTexture.SampleLevel(TexMapSampler, uv,0);
-    float4 pixColor = float4(output.x,0.0f,0.0f,0.0f);
-    OutputSurface[ThreadId.xy] = pixColor; //SrcTexture.SampleLevel(TexMapSampler, uv,0);
+    float4 pixColor = float4(output.x,0.0f,0.0f,0.0f)*CSVariables.mag/CSVariables.deltaTime;
+    h0_phi_RW[idx] += pixColor;
+    OutputSurface[ThreadId.xy] = h0_phi_RW[idx]; //SrcTexture.SampleLevel(TexMapSampler, uv,0);
 
     return;
 }

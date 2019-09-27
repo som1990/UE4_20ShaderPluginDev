@@ -8,24 +8,35 @@ public:
 	FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLevel::Type ShaderFeatureLevel);
 	~FComputeTestExecute();
 
-	void ExecuteComputeShader(FTexture2DRHIRef _InTexture, FColor DisplayColor);
+	void ExecuteComputeShader(FTexture2DRHIRef _InTexture, FColor DisplayColor, float _mag, float _delTime);
 
 	void ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList);
 
 	FTexture2DRHIRef GetTexture() { return Texture; }
 
+protected:
+	void CreateBufferAndUAV(FResourceArrayInterface* Data, uint32 byte_width, uint32 byte_stride, FStructuredBufferRHIRef* ppBuffer, FUnorderedAccessViewRHIRef* ppUAV, FShaderResourceViewRHIRef* ppSRV);
+	void ClearInternalData();
 private:
 	bool bIsComputeShaderExecuting;
 	bool bIsUnloading;
-	bool bMustRegenerateUAV;
+	bool bSimulatorInitialized;
 	bool bMustRegenerateSRV;
 
 	ERHIFeatureLevel::Type FeatureLevel;
-
-	FTexture2DRHIRef Texture;
-	FTexture2DRHIRef InputTexture;
+	
 	FLinearColor inColor;
 
+	FTexture2DRHIRef Texture;
 	FUnorderedAccessViewRHIRef TextureUAV;
+
+	FTexture2DRHIRef InputTexture;
 	FShaderResourceViewRHIRef InTextureSRV;
+	
+	FStructuredBufferRHIRef h0_phi0_SB_RW;
+	FUnorderedAccessViewRHIRef h0_phi0_UAV;
+	FShaderResourceViewRHIRef h0_phi0_SRV;
+	
+	FComputeShaderVariableParameters m_VariableParameters;
+	
 };

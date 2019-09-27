@@ -45,8 +45,9 @@ void ACSTestSim::BeginDestroy()
 
 }
 
-void ACSTestSim::LoadHeightMapSource(float _magnitude, UTexture2D* SourceMap, FColor DisplayColor)
+void ACSTestSim::LoadHeightMapSource(float _magnitude, float _delTime, UTexture2D* SourceMap, FColor DisplayColor)
 {
+	check(IsInGameThread());
 	if (SourceMap->GetSizeX() != texSizeX || SourceMap->GetSizeY() != texSizeY)
 	{
 		UE_LOG(ComputeLog, Error, TEXT("Set Dimensions don't match input texture map. Returning."));
@@ -60,6 +61,7 @@ void ACSTestSim::LoadHeightMapSource(float _magnitude, UTexture2D* SourceMap, FC
 		return;
 	}
 	//GEngine->AddOnScreenDebugMessage(-1, 0.2, FColor::Yellow, TEXT("Magnitude: ") + FString::SanitizeFloat(_magnitude));
+	
 	if (InputTexture != NULL)
 	{
 		InputTexture.SafeRelease();
@@ -71,9 +73,10 @@ void ACSTestSim::LoadHeightMapSource(float _magnitude, UTexture2D* SourceMap, FC
 	{
 		InputTexture = static_cast<FTexture2DResource*>(SourceMap->Resource)->GetTexture2DRHI();
 		UE_LOG(ComputeLog, Warning, TEXT("RHITexture2D Extracted, Dimensions: %d, %d"), SourceMap->GetSizeX(), SourceMap->GetSizeY());
-		testComputeShader->ExecuteComputeShader(InputTexture, DisplayColor);
-		UE_LOG(ComputeLog, Warning, TEXT("Shader Computed."));
+		testComputeShader->ExecuteComputeShader(InputTexture, DisplayColor, _magnitude, _delTime);
 		
+		//FlushRenderingCommands();
+		UE_LOG(ComputeLog, Warning, TEXT("Shader Computed."));
 	}
 	
 }

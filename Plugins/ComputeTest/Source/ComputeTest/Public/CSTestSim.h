@@ -26,7 +26,7 @@ protected:
 	virtual void BeginDestroy() override;
 
 	UFUNCTION(BlueprintCallable, Category = "SGPlugin|LoadSource")
-	void LoadHeightMapSource(float _magnitude, UTexture2D* SourceMap, FColor DisplayColor);
+	void LoadHeightMapSource(float _magnitude, float _delTime, UTexture2D* SourceMap, FColor DisplayColor);
 	
 	UFUNCTION(BlueprintCallable, Category = "SGPlugin|PreviewTexture")
 	void GeneratePreviewTexture(UTexture2D* &OutTexture);
