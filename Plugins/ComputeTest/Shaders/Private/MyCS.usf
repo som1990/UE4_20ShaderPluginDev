@@ -27,7 +27,7 @@ void AddSourceHeightCS(uint3 ThreadId : SV_DispatchThreadID)
     int idx = ThreadId.x  + ThreadId.y * width;
     float2 uv = float2(ThreadId.xy)/ float2(width, height);
     float4 output = SrcTexture[ThreadId.xy];//SrcTexture.SampleLevel(TexMapSampler, uv,0);
-    float4 pixColor = float4(output.x,0.0f,0.0f,0.0f)*CSVariables.mag/CSVariables.deltaTime;
+    float4 pixColor = float4(output.x,0.0f,0.0f,0.0f)*CSVariables.mag*CSVariables.deltaTime;
     h0_phi_RW[idx] += pixColor;
     OutputSurface[ThreadId.xy] = h0_phi_RW[idx]; //SrcTexture.SampleLevel(TexMapSampler, uv,0);
 

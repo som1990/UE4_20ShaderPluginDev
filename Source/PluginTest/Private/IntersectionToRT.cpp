@@ -34,7 +34,7 @@ void AIntersectionToRT::BeginPlay()
 	Texture = UTexture2D::CreateTransient(
 		TexSize,
 		TexSize,
-		PF_B8G8R8A8
+		PF_A32B32G32R32F
 	);
 	
 }
@@ -144,9 +144,9 @@ void AIntersectionToRT::GenerateRTFromTrace_Internal(const int32 srcWidth, const
 	//GEngine->AddOnScreenDebugMessage(-1, 0.5f, FColor::Green, TEXT("After: ") + FString::FromInt(sizeof(Texture)));
 
 	//GEngine->AddOnScreenDebugMessage(-1, 0.5f, FColor::Red, TEXT("Size: ") + FString::FromInt(srcWidth) + TEXT(", ") + FString::FromInt(srcHeight));
-	uint8* MipData = static_cast<uint8*>(Texture->PlatformData->Mips[0].BulkData.Lock(LOCK_READ_WRITE));
+	float* MipData = static_cast<float*>(Texture->PlatformData->Mips[0].BulkData.Lock(LOCK_READ_WRITE));
 
-	uint8* DestPtr = NULL;
+	float* DestPtr = NULL;
 	const FColor* SrcPtr = NULL;
 	for (int32 y = 0; y < srcHeight; y++)
 	{
@@ -154,16 +154,17 @@ void AIntersectionToRT::GenerateRTFromTrace_Internal(const int32 srcWidth, const
 		SrcPtr = const_cast<FColor*>(&SrcData[(srcHeight - 1 - y)* srcWidth]);
 		for (int32 x = 0; x < srcWidth; x++)
 		{
-			*DestPtr++ = SrcPtr->B;
-			*DestPtr++ = SrcPtr->G;
-			*DestPtr++ = SrcPtr->R;
+			
+			*DestPtr++ = SrcPtr->R/255.0;
+			*DestPtr++ = SrcPtr->G/255.0;
+			*DestPtr++ = SrcPtr->B/255.0;
 			if (UseAlpha)
 			{
-				*DestPtr++ = SrcPtr->A;
+				*DestPtr++ = SrcPtr->A / 255.0;
 			}
 			else
 			{
-				*DestPtr++ = 0xFF;
+				*DestPtr++ = 1.0f;
 			}
 			SrcPtr++;
 		}

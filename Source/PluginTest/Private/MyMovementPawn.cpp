@@ -53,6 +53,9 @@ void AMyMovementPawn::Tick(float DeltaTime)
 		SetActorLocation(NewLocation);
 	}
 	
+	//Calc Magnitude
+	mag = CurrentVelocity.Size();
+
 	//Block for transferring Position to Texture
 	{
 		FHitResult OutHit;
@@ -62,6 +65,7 @@ void AMyMovementPawn::Tick(float DeltaTime)
 		//CollisionParams.bTraceComplex = true;
 		//CollisionParams.AddIgnoredActor(this);
 		TArray<AActor*>IgnoreActor;
+	
 		IgnoreActor.Add(this);
 		//bool hit = GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, CollisionParams);
 		bool hit = UKismetSystemLibrary::LineTraceSingle(GetWorld(), Start, End, ETraceTypeQuery::TraceTypeQuery1, true, IgnoreActor, EDrawDebugTrace::ForDuration, OutHit, true);
@@ -84,11 +88,6 @@ void AMyMovementPawn::Tick(float DeltaTime)
 				u = outUV.X;
 				v = outUV.Y;
 				
-				float uDiff = u - prevU;
-				float vDiff = v - prevV;
-				mag = FVector2D(uDiff, vDiff).Size();
-				prevU = u;
-				prevV = v;
 				//GEngine->AddOnScreenDebugMessage(-1, 0.1f, FColor::Blue, TEXT("Mag: ") + FString::SanitizeFloat(mag));
 			}
 			else

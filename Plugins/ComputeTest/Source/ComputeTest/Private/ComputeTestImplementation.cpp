@@ -66,7 +66,7 @@ void FComputeTestExecute::ClearInternalData()
 
 }
 
-void FComputeTestExecute::ExecuteComputeShader(FTexture2DRHIRef _InTexture, FColor DisplayColor, float _mag, float _delTime)
+void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRenderTarget, FTexture2DRHIRef inputTexture, const FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget)
 {
 	check(IsInGameThread());
 
@@ -78,23 +78,47 @@ void FComputeTestExecute::ExecuteComputeShader(FTexture2DRHIRef _InTexture, FCol
 	if (bIsUnloading || bIsComputeShaderExecuting)
 		return;
 	bIsComputeShaderExecuting = true;
-	if (InputTexture != _InTexture)
-	{
-		bMustRegenerateSRV = true;
-	}
 
-	
-	InputTexture = _InTexture;
 	inColor = FLinearColor(DisplayColor.R / 255.0, DisplayColor.G / 255.0, DisplayColor.B / 255.0, DisplayColor.A / 255.0);
 	UE_LOG(InternalShaderLog, Warning, TEXT("Shader Variables Initialized"));
 
 	m_VariableParameters.mag = _mag;
 	m_VariableParameters.deltaTime = _delTime;
 	
+	struct RenderTargetInput {
+		UTextureRenderTarget2D* inputRT;
+		bool bUseRenderTarget;
+		FTexture2DRHIRef inTexture;
+	};
+	RenderTargetInput* rtInput = new RenderTargetInput();
+	rtInput->inputRT = inputRenderTarget;
+	rtInput->bUseRenderTarget = bUseRenderTarget;
+	rtInput->inTexture = inputTexture;
 	FComputeTestExecute* MyShader = this;
 	ENQUEUE_RENDER_COMMAND(ComputeShaderRun)(
-		[MyShader](FRHICommandListImmediate& RHICmdList)
+		[MyShader, rtInput](FRHICommandListImmediate& RHICmdList)
 		{
+			check(IsInRenderingThread());
+			FTexture2DRHIRef rtTexture = nullptr;
+			if (rtInput->bUseRenderTarget)
+			{
+				rtTexture = rtInput->inputRT->GetRenderTargetResource()->GetRenderTargetTexture();
+				if (MyShader->InputTexture != rtTexture)
+				{
+					MyShader->bMustRegenerateSRV = true;
+				}
+				MyShader->InputTexture = rtTexture;
+			}
+			else
+			{
+				if (MyShader->InputTexture != rtInput->inTexture)
+				{
+					MyShader->bMustRegenerateSRV = true;
+				}
+				MyShader->InputTexture = rtInput->inTexture;
+			}
+			
+			  
 			MyShader->ExecuteComputeShaderInternal(RHICmdList);
 		}
 	);
@@ -104,7 +128,7 @@ void FComputeTestExecute::ExecuteComputeShader(FTexture2DRHIRef _InTexture, FCol
 
 void FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList)
 {
-	check(IsInRenderingThread());
+	
 
 	if (bIsUnloading)
 	{
@@ -128,7 +152,7 @@ void FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate&
 	TShaderMapRef<FAddSourceHeightCS> ComputeShader(GetGlobalShaderMap(FeatureLevel));
 	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
 
-	ComputeShader->SetParameters(RHICmdList, inColor, InTextureSRV, InputTexture);
+	ComputeShader->SetParameters(RHICmdList, inColor, InTextureSRV);
 	ComputeShader->SetOutput(RHICmdList, TextureUAV, h0_phi0_UAV);
 	ComputeShader->SetUniformBuffers(RHICmdList, m_VariableParameters);
 	//RHICmdList.DispatchComputeShader(InputTexture->GetSizeX()/8, InputTexture->GetSizeY()/8,1);

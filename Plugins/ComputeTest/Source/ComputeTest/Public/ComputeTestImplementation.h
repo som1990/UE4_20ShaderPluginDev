@@ -8,7 +8,7 @@ public:
 	FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLevel::Type ShaderFeatureLevel);
 	~FComputeTestExecute();
 
-	void ExecuteComputeShader(FTexture2DRHIRef _InTexture, FColor DisplayColor, float _mag, float _delTime);
+	void ExecuteComputeShader(UTextureRenderTarget2D* InRenderTarget, FTexture2DRHIRef _inputTexture, const FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget);
 
 	void ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList);
 

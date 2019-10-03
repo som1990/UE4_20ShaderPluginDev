@@ -49,9 +49,7 @@ public:
 	void SetParameters(
 		FRHICommandList& RHICmdList,
 		const FLinearColor& Color,
-		FShaderResourceViewRHIParamRef TextureParameterSRV,
-		FTextureRHIParamRef InputTextureRef
-		
+		FShaderResourceViewRHIParamRef TextureParameterSRV
 		)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
@@ -59,10 +57,10 @@ public:
 		SetShaderValue(RHICmdList, ComputeShaderRHI, MyColorParameter, Color);
 		if (TextureParameter.IsBound())
 		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, TextureParameter.GetBaseIndex(), TextureParameterSRV);
 			FSamplerStateRHIParamRef SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
-
 			SetSamplerParameter(RHICmdList, ComputeShaderRHI, TexMapSampler, SamplerStateLinear);
-			SetTextureParameter(RHICmdList, ComputeShaderRHI, TextureParameter, InputTextureRef);
+			
 		}
 	}
 
@@ -195,17 +193,21 @@ public:
 	
 	void SetParameters(
 		FRHICommandList& RHICmdList,
-		FShaderResourceViewRHIParamRef TextureParameterSRV
+		FShaderResourceViewRHIParamRef TextureParameterSRV,
+		FTextureRHIParamRef InputTextureRef
 	)
 	{
 		FPixelShaderRHIParamRef PixelShaderRHI = GetPixelShader();
 
 		if (TextureParameter.IsBound()) {
+			
 			RHICmdList.SetShaderResourceViewParameter(PixelShaderRHI, TextureParameter.GetBaseIndex(), TextureParameterSRV);
+			FSamplerStateRHIParamRef SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+			SetSamplerParameter(RHICmdList, PixelShaderRHI, TexMapSampler, SamplerStateLinear);
+			//SetTextureParameter(RHICmdList, PixelShaderRHI, TextureParameter, InputTextureRef);
 		}
 
-		FSamplerStateRHIParamRef SamperStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
-		SetSamplerParameter(RHICmdList, PixelShaderRHI, TexMapSampler, SamperStateLinear);
+		
 		
 	}
 

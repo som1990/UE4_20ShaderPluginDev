@@ -22,7 +22,7 @@ void ACSTestSim::BeginPlay()
 {
 	Super::BeginPlay();
 	testComputeShader = new FComputeTestExecute(512, 512, GetWorld()->Scene->GetFeatureLevel());
-	
+	testDisplayShader = new FDisplayShaderExecute(512, 512, GetWorld()->Scene->GetFeatureLevel());
 }
 
 
@@ -45,15 +45,25 @@ void ACSTestSim::BeginDestroy()
 
 }
 
-void ACSTestSim::LoadHeightMapSource(float _magnitude, float _delTime, UTexture2D* SourceMap, FColor DisplayColor)
+void ACSTestSim::LoadHeightMapSource(float _magnitude, float _delTime, UTexture2D* SourceMap, FColor DisplayColor, UTextureRenderTarget2D* InRenderTarget, bool bUseRenderTarget)
 {
 	check(IsInGameThread());
-	if (SourceMap->GetSizeX() != texSizeX || SourceMap->GetSizeY() != texSizeY)
+	int sizeX, sizeY;
+	if (bUseRenderTarget)
+	{
+		sizeX = InRenderTarget->SizeX;
+		sizeY = InRenderTarget->SizeY;
+	}
+	else
+	{
+		sizeX = SourceMap->GetSizeX();
+		sizeY = SourceMap->GetSizeY();
+	}
+	if (sizeX != texSizeX || sizeY != texSizeY)
 	{
 		UE_LOG(ComputeLog, Error, TEXT("Set Dimensions don't match input texture map. Returning."));
 		bIsTextureDimensionsSet = false;
 		return;
-
 	}
 	if (!bIsTextureDimensionsSet)
 	{
@@ -69,16 +79,24 @@ void ACSTestSim::LoadHeightMapSource(float _magnitude, float _delTime, UTexture2
 		UE_LOG(ComputeLog, Warning, TEXT("InputTexture Reset."));
 	}
 	
-	if (SourceMap)
+	InputTexture = static_cast<FTexture2DResource*>(SourceMap->Resource)->GetTexture2DRHI();
+	
+	UE_LOG(ComputeLog, Warning, TEXT("RHITexture2D Extracted, Dimensions: %d, %d"), SourceMap->PlatformData->Mips[0].SizeX, SourceMap->PlatformData->Mips[0].SizeY);
+	if (InputTexture)
 	{
-		InputTexture = static_cast<FTexture2DResource*>(SourceMap->Resource)->GetTexture2DRHI();
-		UE_LOG(ComputeLog, Warning, TEXT("RHITexture2D Extracted, Dimensions: %d, %d"), SourceMap->GetSizeX(), SourceMap->GetSizeY());
-		testComputeShader->ExecuteComputeShader(InputTexture, DisplayColor, _magnitude, _delTime);
+		//FTexture2DResource* uTex2DRes = static_cast<FTexture2DResource*>(SourceMap->Resource);
+		
+		testComputeShader->ExecuteComputeShader(InRenderTarget,InputTexture, DisplayColor, _magnitude, _delTime, bUseRenderTarget);
 		
 		//FlushRenderingCommands();
 		UE_LOG(ComputeLog, Warning, TEXT("Shader Computed."));
+		if (RenderTarget2Display)
+		{
+			
+			testDisplayShader->ExecuteDisplayShader(RenderTarget2Display, testComputeShader->GetTexture());
+			UE_LOG(ComputeLog, Warning, TEXT("RenderTarget Generated."));
+		}	
 	}
-	
 }
 
 void ACSTestSim::GeneratePreviewTexture(UTexture2D* &OutTexture)
@@ -112,9 +130,16 @@ void ACSTestSim::setOutputDimensions(int32 xSize, int32 ySize)
 		UE_LOG(ComputeLog, Warning, TEXT("One or Both Input Dimensions are 0.0. Returning"));
 		return;
 	}
-	
-	
-	//testComputeShader = new FComputeTestExecute(xSize, ySize, GetWorld()->Scene->GetFeatureLevel());
+	if (testComputeShader)
+	{
+		delete testComputeShader;
+	}
+	if (testDisplayShader)
+	{
+		delete testDisplayShader;
+	}
+	testComputeShader = new FComputeTestExecute(xSize, ySize, GetWorld()->Scene->GetFeatureLevel());
+	testDisplayShader = new FDisplayShaderExecute(xSize, ySize, GetWorld()->Scene->GetFeatureLevel());
 	texSizeX = xSize;
 	texSizeY = ySize;
 	UE_LOG(ComputeLog, Warning, TEXT("OutTexture Extracted, Dimensions: %d, %d"), xSize, ySize);
