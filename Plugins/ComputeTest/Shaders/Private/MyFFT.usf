@@ -1,0 +1,159 @@
+#pragma once
+#include "/Engine/Private/Common.ush"
+
+// Requires the following defined:
+// SCAN_LINE_LENGTH
+
+// MAP get the RADIX and NUMTHREADSX as a function of SCAN_LINE_LENGTH
+
+#if SCAN_LINE_LENGTH == 2
+	#define RADIX  2
+#endif
+
+#if SCAN_LINE_LENGTH == 4
+	#define RADIX 4
+#endif
+
+#if SCAN_LINE_LENGTH == 8
+	#define RADIX 8
+#endif
+
+#if SCAN_LINE_LENGTH == 16
+	#define RADIX 4
+#endif
+
+#if SCAN_LINE_LENGTH == 32
+	#define RADIX 2
+#endif
+
+#if SCAN_LINE_LENGTH == 64
+	#define RADIX 8
+#endif 
+
+#if SCAN_LINE_LENGTH == 128
+	#define RADIX 2
+#endif
+
+#if SCAN_LINE_LENGTH == 256
+	#define RADIX 4
+#endif
+
+#if SCAN_LINE_LENGTH == 512
+	#define RADIX 8
+#endif
+
+#if SCAN_LINE_LENGTH == 1024
+	#define RADIX 4
+#endif
+
+#if SCAN_LINE_LENGTH == 2048
+	#define RADIX 2
+#endif
+
+#if SCAN_LINE_LENGTH == 4096
+	#define RADIX 8
+#endif
+
+
+// NB: This is only needed for the not group shared stuff below.
+// Need to make that work and re-factor to fix this.
+#ifndef RADIX
+	#define RADIX 4
+	#define SCAN_LINE_LENGTH  1024
+#endif 
+
+#define NUMTHREADSX ( SCAN_LINE_LENGTH / RADIX )
+
+#define STRIDE ( SCAN_LINE_LENGTH / RADIX )
+
+#include "GPUFFTHelper.ush"
+
+#ifdef INCLUDE_GROUP_SHARED_COMPLEX_FFT
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+//				FFT Compute Shader for two channels of complex data in an image
+//              and inverse. 
+//              And Helpers
+// ---------------------------------------------------------------------------------------------------------------------------------------
+uint2 SrcRectMin;
+uint2 SrcRectMax;
+uint2 DstExtent;
+uint4 DstRect;
+
+// CS Entry Point:
+// Compute shader that performs (two) complex FFTs of the data in 'SrcTexture'
+//
+// uint2 TransformDef; determines the type (forward / inverse) and direction of the transform.
+//       TransformType & 1 == {1,0} transforms the data in the {Horizontal , Vertical} direction.
+//       TransformType & 2 == {1,0} performs a {Forward , Inverse} transform.
+//
+// The 'r & g' channels are transformed as one complex signal 'r + I * g'
+// The 'b & a' channels are transformed as a second complex signal 'b + I * a'
+//
+// uint2 SrcRectMin,  SrcRectMax; 
+// define the subsection of 'SrcTexture' to be transformed.  
+// 
+// 
+// The FFT transforms a signal with a power-of-two length N.  
+// A "Horizontal / Vertical" transform,  will transform horizontal/vertical scanlines independently.  
+// The scanlines have length N = NUMTHREADSX * RADIX.  
+// 
+// The input data is composed of scanlines from a windowed region of SrcTexture (SrcRectMin/Max).
+// Since SrcRectMax - SrcRectMin  is generally smaller than N, the scanlines are padded with zero. 
+//
+// NB:   uint2 TransformSize is the target buffer size.
+//       It is assumed that TransformSize.x == NUMTHREADSX * RADIX  
+//                          TransformSize.y == Number of thread groups
+
+uint TransformType;
+[numthreads(NUMTHREADSX, 1, 1)]
+void GroupSharedComplexFFTCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID )
+{
+	const bool bIsHorizontal = (TransformType & 0x1);
+	const bool bIsForward    = (TransformType & 0x2);
+
+	// Threads are defined in a 1d array.
+
+	const uint ThreadIdx = GroupThreadID.x;
+
+	// The scan line this thread works on
+
+	const uint ScanIdx  = GroupID.z;
+
+    uint structBufferID = ScanIdx * NUMTHREADSX + ThreadIdx;
+	// The length of the signal to be transformed
+	
+	const uint SignalLength = SCAN_LINE_LENGTH;
+
+	// The main memory access pattern for this thread.
+
+	uint Head = ThreadIdx;
+	const uint Stride = STRIDE;   
+	 
+	// Thread-local memory.  Reserve two arrays since we plit .xy and .zw channels   
+	
+	Complex LocalBuffer[2][RADIX];
+	
+	
+	// Load the local memory from the source texture
+	// LocalBuffer[0][] holds .xy,  LocalBuffer[1][] holds.zw
+	
+	
+	// Read from an image buffer
+	CopyDataSrcWindowToLocal(LocalBuffer, bIsHorizontal, ScanIdx, Head, Stride, SrcRectMin, SrcRectMax);
+	//FFTMemoryBarrier();
+	
+	// Fourier Transform  the data
+	// This uses the group shared memory and has appropriate syncs
+	
+	GroupSharedFFT(bIsForward, LocalBuffer, SignalLength, ThreadIdx);
+
+	// Copy data to target buffer
+
+	
+	// Write image space data.
+	//FFTMemoryBarrier();
+	CopyDataLocalToDstWindow(LocalBuffer, bIsHorizontal, ScanIdx, Head, Stride, DstExtent);
+}
+
+#endif  // #ifdef INCLUDE_GROUP_SHARED_COMPLEX_FFT

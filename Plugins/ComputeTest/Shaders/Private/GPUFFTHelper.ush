@@ -1,0 +1,247 @@
+// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+
+/*=============================================================================
+GPUFastFourierTransform2DCore.usf: Core 2D Fast Fourier Transform Code 
+=============================================================================*/
+
+#pragma once
+
+// This file requires the two values to be defined.
+// SCAN_LINE_LENGTH must be a power of RADIX and RADIX in turn must be a power of two 
+// Need define:  RADIX and SCAN_LINE_LENGTH
+
+// The core FFT functionality
+
+#include "MyGPUFastFourierTransformCore.ush"
+
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+//				For the 2D FFT - Utilities used copying data between main memory and local registers where each thread of the FFT works.
+// --------------------------------------------------------------------------------------------------------------------------------------- 
+
+// The Src and Dst buffers containt two types of data: 
+//      A real 4 channel color (r,g,b,a)  or  two complex numbers  float4.{xy, zw} = (Complex, Complex) 
+
+#define SRCTYPE  float4
+#define DSTTYPE  float4
+
+#define Texture2DType    Texture2D<SRCTYPE>
+#define RWTexture2DType  RWTexture2D<DSTTYPE>
+
+// Input SRV: 
+Texture2DType SrcTexture;
+
+// Output: Real and Imaginary Parts (UAV)
+RWTexture2DType DstTexture;
+//RWStructuredBuffer<float4> DstStructBuffer;
+
+
+// Utility to replace any NaNs with zeros.
+void ScrubNANs(inout Complex LocalBuffer[2][RADIX])
+{
+
+	UNROLL
+	for (uint r = 0; r < RADIX; ++r)
+	{	
+	
+		LocalBuffer[0][r] = -min(-LocalBuffer[0][r], Complex(0,0) ); 
+		LocalBuffer[1][r] = -min(-LocalBuffer[1][r], Complex(0,0) ); 
+	}
+}
+
+
+// Copy Data from main memory (src texture) to local 
+
+void CopyDataSrcToLocal(inout Complex LocalBuffer[2][RADIX], bool bIsHorizontal, uint ScanIdx, uint Loc, uint Stride )
+{
+	if (bIsHorizontal) 
+	{
+		uint2 Pixel = uint2(Loc, ScanIdx);
+		UNROLL
+		for (uint i = 0; i < RADIX; ++i, Pixel.x += Stride)
+		{
+			float4 SrcValue = SrcTexture[Pixel];
+			LocalBuffer[0][ i ] = SrcValue.xy;
+			LocalBuffer[1][ i ] = SrcValue.zw;
+		}
+	}
+	else 
+	{
+		uint2 Pixel = uint2(ScanIdx, Loc);
+		UNROLL
+		for (uint i = 0; i < RADIX; ++i, Pixel.y += Stride)
+		{
+			float4 SrcValue = SrcTexture[Pixel];
+			LocalBuffer[0][ i ] = SrcValue.xy;
+			LocalBuffer[1][ i ] = SrcValue.zw;
+		}
+	}
+}
+
+// Copy Data back to main memory (dst)
+
+void CopyDataLocalToDst(in Complex LocalBuffer[2][RADIX], bool bIsHorizontal, uint ScanIdx, uint Loc, uint Stride)
+{
+	//uint StructBufferID = 0;
+	if(bIsHorizontal)
+	{
+		uint2 Pixel = uint2(Loc, ScanIdx);
+		//StructBufferID = NumThreads*ScanIdx + Loc;
+		UNROLL
+		for (uint r = 0; r < RADIX; ++r, Pixel.x += Stride)
+		{
+			float4 DstValue;
+			DstValue.xy = LocalBuffer[0][r];
+			DstValue.zw = LocalBuffer[1][r];
+			DstTexture[Pixel] = DstValue;
+            
+           // DstStructBuffer[StructBufferID] = DstValue;
+            
+        }
+	}
+	else
+	{
+		uint2 Pixel = uint2(ScanIdx, Loc);
+		//StructBufferID = NumThreads*Loc + ScanIdx;
+		UNROLL
+		for (uint r = 0; r < RADIX; ++r, Pixel.y += Stride)
+		{
+			float4 DstValue;
+			DstValue.xy = LocalBuffer[0][r];
+			DstValue.zw = LocalBuffer[1][r];
+			DstTexture[Pixel] = DstValue;
+
+            //DstStructBuffer[StructBufferID] = DstValue;
+		}
+	}
+}
+
+
+// Copy Data from main memory (src texture) to local buffer
+// Loads zero values for areas outside the window.
+
+void CopyDataSrcWindowToLocal(inout Complex LocalBuffer[2][RADIX], bool bIsHorizontal, in uint ScanIdx, uint Loc, uint Stride, uint4 Window)
+{
+	for (uint i = 0; i < RADIX; ++i) LocalBuffer[0][ i ] = float2(0.f, 0.f);
+	for (uint i = 0; i < RADIX; ++i) LocalBuffer[1][ i ] = float2(0.f, 0.f);
+	
+	if (bIsHorizontal) 
+	{
+		// offset for window start
+		uint2 Pixel = uint2(Loc, ScanIdx) + Window.xy;
+		UNROLL
+		for (uint i = 0; i < RADIX ; ++i, Pixel.x += Stride)
+		{	
+			bool InWindow = !(Pixel.x > Window.z); 
+			if (InWindow)
+			{ 
+				float4 SrcValue = SrcTexture[Pixel];
+				LocalBuffer[0][ i ] = SrcValue.xy;
+				LocalBuffer[1][ i ] = SrcValue.zw;
+			}
+
+		}
+	}
+	else 
+	{
+		// offset for window start
+		uint2 Pixel = uint2(ScanIdx, Loc) + Window.xy;
+		UNROLL
+		for (uint i = 0; i < RADIX; ++i, Pixel.y += Stride)
+		{
+			bool InWindow = !(Pixel.y > Window.w);
+			if (InWindow)
+			{ 
+				float4 SrcValue = SrcTexture[Pixel];
+				LocalBuffer[0][ i ] = SrcValue.xy;
+				LocalBuffer[1][ i ] = SrcValue.zw;
+			}
+		}
+	}
+}
+
+
+// Copy Data from main memory (src texture) to local buffer
+// Loads zero values for areas outside the window.
+
+void CopyDataSrcWindowToLocal(inout Complex LocalBuffer[2][RADIX], bool bIsHorizontal, uint ScanIdx, uint Loc, uint Stride, uint2 WindowMin, uint2 WindowMax )
+{
+	for (uint i = 0; i < RADIX; ++i) LocalBuffer[0][ i ] = float2(0.f, 0.f);
+	for (uint i = 0; i < RADIX; ++i) LocalBuffer[1][ i ] = float2(0.f, 0.f);
+
+	if (bIsHorizontal) 
+	{
+		uint2 Pixel = uint2(Loc, ScanIdx) + uint2(WindowMin.x, 0);
+		UNROLL
+		for (uint i = 0; i < RADIX; ++i, Pixel.x += Stride)
+		{	
+			bool InWindow = !(Pixel.x > WindowMax.x); 
+			if (InWindow)
+			{ 
+				float4 SrcValue = SrcTexture[Pixel];
+				LocalBuffer[0][ i ] = SrcValue.xy;
+				LocalBuffer[1][ i ] = SrcValue.zw;
+			}		
+		}
+	}
+	else 
+	{
+		uint2 Pixel = uint2(ScanIdx, Loc) + uint2(0, WindowMin.y);
+		UNROLL
+		for (uint i = 0; i < RADIX; ++i, Pixel.y += Stride)
+		{
+			bool InWindow = !(Pixel.y > WindowMax.y);
+			if (InWindow)
+			{	
+				float4 SrcValue = SrcTexture[Pixel];
+				LocalBuffer[0][ i ] = SrcValue.xy;
+				LocalBuffer[1][ i ] = SrcValue.zw;
+			}
+		}
+	}
+}
+
+// Copy windowed Data back to main memory aligned with ROIRect.xy
+
+void CopyDataLocalToDstWindow(in Complex LocalBuffer[2][RADIX], bool bIsHorizontal, in uint ScanIdx, uint Loc, uint Stride, uint4 ROIRect)
+{
+	//uint StructBufferID = 0;
+	if(bIsHorizontal)
+	{
+		
+		uint2 Pixel = uint2(Loc + ROIRect.x, ScanIdx + ROIRect.y);
+		//StructBufferID = (Loc + ROIRect.x) + (ScanIdx + ROIRect.y)*NumThreads;
+		UNROLL
+		for (uint r = 0; r < RADIX && Pixel.x < ROIRect.z; ++r, Pixel.x += Stride)
+		{
+			float4 DstValue;
+			DstValue.xy = LocalBuffer[0][r];
+			DstValue.zw = LocalBuffer[1][r];
+
+			DstTexture[Pixel] = DstValue;
+		}
+	}
+	else
+	{
+		uint2 Pixel = uint2(ScanIdx + ROIRect.x, Loc + ROIRect.y);
+
+		UNROLL
+		for (uint r = 0; r < RADIX && Pixel.y < ROIRect.w; ++r, Pixel.y += Stride)
+		{
+			float4 DstValue;
+			DstValue.xy = LocalBuffer[0][r];
+			DstValue.zw = LocalBuffer[1][r];
+
+			DstTexture[Pixel] = DstValue;
+		}
+	}
+}
+
+
+// Copy windowed Data back to main aligned with 0,0
+
+void CopyDataLocalToDstWindow(in Complex LocalBuffer[2][RADIX], bool bIsHorizontal, uint ScanIdx, uint Loc, uint Stride, uint2 Extent)
+{
+	uint4 ROIRect = uint4(0, 0, Extent.x, Extent.y);
+	CopyDataLocalToDstWindow(LocalBuffer, bIsHorizontal, ScanIdx, Loc, Stride, ROIRect);
+}

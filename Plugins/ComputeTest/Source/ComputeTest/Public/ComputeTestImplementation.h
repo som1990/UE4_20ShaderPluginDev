@@ -10,13 +10,15 @@ public:
 
 	void ExecuteComputeShader(UTextureRenderTarget2D* InRenderTarget, FTexture2DRHIRef _inputTexture, const FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget);
 
-	void ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList);
+	bool ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList);
+	bool ExecuteFFT(FRHICommandListImmediate& RHICmdList);
 
-	FTexture2DRHIRef GetTexture() { return Texture; }
+	FTexture2DRHIRef GetTexture() { return OutTexture; }
 
 protected:
 	void CreateBufferAndUAV(FResourceArrayInterface* Data, uint32 byte_width, uint32 byte_stride, FStructuredBufferRHIRef* ppBuffer, FUnorderedAccessViewRHIRef* ppUAV, FShaderResourceViewRHIRef* ppSRV);
 	void ClearInternalData();
+
 private:
 	bool bIsComputeShaderExecuting;
 	bool bIsUnloading;
@@ -27,11 +29,16 @@ private:
 	
 	FLinearColor inColor;
 
-	FTexture2DRHIRef Texture;
-	FUnorderedAccessViewRHIRef TextureUAV;
+	FTexture2DRHIRef OutTexture;
+	FUnorderedAccessViewRHIRef OutTextureUAV;
+	FShaderResourceViewRHIRef OutTextureSRV;
 
 	FTexture2DRHIRef InputTexture;
 	FShaderResourceViewRHIRef InTextureSRV;
+
+	FTexture2DRHIRef TmpTexture;
+	FUnorderedAccessViewRHIRef TmpTextureUAV;
+	FShaderResourceViewRHIRef TmpTextureSRV;
 	
 	FStructuredBufferRHIRef h0_phi0_SB_RW;
 	FUnorderedAccessViewRHIRef h0_phi0_UAV;

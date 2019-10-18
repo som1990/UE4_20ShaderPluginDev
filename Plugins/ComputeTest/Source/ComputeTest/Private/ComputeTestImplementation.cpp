@@ -17,9 +17,15 @@ FComputeTestExecute::FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLe
 	InputTexture = NULL;
 	InTextureSRV = NULL;
 	FRHIResourceCreateInfo createInfo;
-	Texture = RHICreateTexture2D(sizeX, sizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createInfo);
-	TextureUAV = RHICreateUnorderedAccessView(Texture);
-	
+	OutTexture = RHICreateTexture2D(sizeX, sizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createInfo);
+	OutTextureUAV = RHICreateUnorderedAccessView(OutTexture);
+	OutTextureSRV = RHICreateShaderResourceView(OutTexture, 0);
+
+	FRHIResourceCreateInfo createTmpInfo;
+	TmpTexture = RHICreateTexture2D(sizeX, sizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createTmpInfo);
+	TmpTextureUAV = RHICreateUnorderedAccessView(TmpTexture);
+	TmpTextureSRV = RHICreateShaderResourceView(TmpTexture, 0);
+
 	int output_size = sizeX * sizeY;
 	TResourceArray<FVector4> h0_phi0_data;
 	h0_phi0_data.Init(FVector4(0.f, 0.f, 0.f, 0.f),output_size);
@@ -45,25 +51,65 @@ void FComputeTestExecute::CreateBufferAndUAV(FResourceArrayInterface* Data, uint
 
 void FComputeTestExecute::ClearInternalData()
 {
-	TextureUAV.SafeRelease();
-	TextureUAV = NULL;
+	if (OutTextureUAV != NULL)
+	{
+		OutTextureUAV.SafeRelease();
+		OutTextureUAV = NULL;
+	}
 
-	InTextureSRV.SafeRelease();
-	InTextureSRV = NULL;
+	if (InTextureSRV != NULL)
+	{
+		InTextureSRV.SafeRelease();
+		InTextureSRV = NULL;
+	}
 
-	InputTexture.SafeRelease();
-	InputTexture = NULL;
+	if (InputTexture != NULL)
+	{
+		InputTexture.SafeRelease();
+		InputTexture = NULL;
+	}
+	
+	if (OutTexture != NULL)
+	{
+		OutTexture.SafeRelease();
+		OutTexture = NULL;
+	}
+	
+	if (h0_phi0_SB_RW != NULL)
+	{
+		h0_phi0_SB_RW.SafeRelease();
+		h0_phi0_SB_RW = NULL;
+	}
 
-	h0_phi0_SB_RW.SafeRelease();
-	h0_phi0_SB_RW = NULL;
+	if (h0_phi0_UAV != NULL)
+	{
+		h0_phi0_UAV.SafeRelease();
+		h0_phi0_UAV = NULL;
+	}
 
-	h0_phi0_UAV.SafeRelease();
-	h0_phi0_UAV = NULL;
+	if (h0_phi0_SRV != NULL)
+	{
+		h0_phi0_SRV.SafeRelease();
+		h0_phi0_SRV = NULL;
+	}
 
-	h0_phi0_SRV.SafeRelease();
-	h0_phi0_SRV = NULL;
+	if (TmpTextureUAV != NULL)
+	{
+		TmpTextureUAV.SafeRelease();
+		TmpTextureUAV = NULL;
+	}
 
+	if (TmpTextureSRV != NULL)
+	{
+		TmpTextureSRV.SafeRelease();
+		TmpTextureSRV = NULL;
+	}
 
+	if (TmpTexture != NULL)
+	{
+		TmpTexture.SafeRelease();
+		TmpTexture = NULL;
+	}
 }
 
 void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRenderTarget, FTexture2DRHIRef inputTexture, const FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget)
@@ -95,8 +141,11 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 	rtInput->bUseRenderTarget = bUseRenderTarget;
 	rtInput->inTexture = inputTexture;
 	FComputeTestExecute* MyShader = this;
+
+	bool SuccessInput = true;
+
 	ENQUEUE_RENDER_COMMAND(ComputeShaderRun)(
-		[MyShader, rtInput](FRHICommandListImmediate& RHICmdList)
+		[MyShader, rtInput, &SuccessInput](FRHICommandListImmediate& RHICmdList)
 		{
 			check(IsInRenderingThread());
 			FTexture2DRHIRef rtTexture = nullptr;
@@ -119,21 +168,31 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 			}
 			
 			  
-			MyShader->ExecuteComputeShaderInternal(RHICmdList);
+			SuccessInput = MyShader->ExecuteComputeShaderInternal(RHICmdList);
 		}
 	);
 
+	ENQUEUE_RENDER_COMMAND(ForwardFFT)(
+		[MyShader, &SuccessInput](FRHICommandListImmediate& RHICmdList)
+		{
+			check(IsInRenderingThread());
+			if (SuccessInput)
+			{
+				SuccessInput = MyShader->ExecuteFFT(RHICmdList);
+			}
+		}
+	);
+	bIsComputeShaderExecuting = false;
 
 }
 
-void FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList)
+bool FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList)
 {
 	
-
 	if (bIsUnloading)
 	{
 		ClearInternalData();
-		return;
+		return false;
 	}
 
 	if (bMustRegenerateSRV)
@@ -153,12 +212,29 @@ void FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate&
 	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
 
 	ComputeShader->SetParameters(RHICmdList, inColor, InTextureSRV);
-	ComputeShader->SetOutput(RHICmdList, TextureUAV, h0_phi0_UAV);
+	ComputeShader->SetOutput(RHICmdList, OutTextureUAV, h0_phi0_UAV);
 	ComputeShader->SetUniformBuffers(RHICmdList, m_VariableParameters);
 	//RHICmdList.DispatchComputeShader(InputTexture->GetSizeX()/8, InputTexture->GetSizeY()/8,1);
 	DispatchComputeShader(RHICmdList, *ComputeShader, FMath::CeilToInt(InputTexture->GetSizeX() / NUM_THREADS_PER_GROUP), FMath::CeilToInt(InputTexture->GetSizeY() / NUM_THREADS_PER_GROUP), 1);
 	ComputeShader->UnbindBuffers(RHICmdList);
 
-	bIsComputeShaderExecuting = false;
+	
+	return true;
+	
+}
+
+bool FComputeTestExecute::ExecuteFFT(FRHICommandListImmediate& RHICmdList)
+{
+	if (bIsUnloading)
+	{
+		ClearInternalData();
+		return false;
+	}
+
+	bool SuccessValue = false;
+	bool bIsForward = true;
+	bool bIsHorizontal = true;
+
+	return SuccessValue;
 }
 
