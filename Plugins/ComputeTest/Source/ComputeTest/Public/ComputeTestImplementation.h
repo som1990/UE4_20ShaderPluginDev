@@ -11,7 +11,7 @@ public:
 	void ExecuteComputeShader(UTextureRenderTarget2D* InRenderTarget, FTexture2DRHIRef _inputTexture, const FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget);
 
 	bool ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList);
-	bool ExecuteFFT(FRHICommandListImmediate& RHICmdList);
+	bool ExecuteFFT(FRHICommandListImmediate& RHICmdList, bool bIsForward);
 
 	FTexture2DRHIRef GetTexture() { return OutTexture; }
 
@@ -24,6 +24,7 @@ private:
 	bool bIsUnloading;
 	bool bSimulatorInitialized;
 	bool bMustRegenerateSRV;
+	FIntPoint FrequencySize;
 
 	ERHIFeatureLevel::Type FeatureLevel;
 	

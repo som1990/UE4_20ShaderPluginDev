@@ -75,6 +75,7 @@
 //              and inverse. 
 //              And Helpers
 // ---------------------------------------------------------------------------------------------------------------------------------------
+uint TransformType;
 uint2 SrcRectMin;
 uint2 SrcRectMax;
 uint2 DstExtent;
@@ -105,7 +106,7 @@ uint4 DstRect;
 //       It is assumed that TransformSize.x == NUMTHREADSX * RADIX  
 //                          TransformSize.y == Number of thread groups
 
-uint TransformType;
+
 [numthreads(NUMTHREADSX, 1, 1)]
 void GroupSharedComplexFFTCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID )
 {

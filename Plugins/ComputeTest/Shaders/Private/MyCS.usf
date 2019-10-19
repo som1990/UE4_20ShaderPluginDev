@@ -1,3 +1,5 @@
+#pragma once
+
 #include "/Engine/Private/Common.ush"
 
 #ifdef ADD_SOURCE_HEIGHTFIELD
@@ -30,7 +32,7 @@ void AddSourceHeightCS(uint3 ThreadId : SV_DispatchThreadID)
     float4 pixColor = float4(output.x,0.0f,0.0f,0.0f)*CSVariables.mag*CSVariables.deltaTime;
     h0_phi_RW[idx] += pixColor;
     OutputSurface[ThreadId.xy] = h0_phi_RW[idx]; //SrcTexture.SampleLevel(TexMapSampler, uv,0);
-
+    //OutputSurface[ThreadId.xy] = float4(10,0,0,1);
     return;
 }
 

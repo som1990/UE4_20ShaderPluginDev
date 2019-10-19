@@ -1,5 +1,6 @@
 #include "ComputeTestImplementation.h"
 #include "ComputeTestPrivatePCH.h"
+#include "GPUFFTCS.h"
 #include "Public/RHIStaticStates.h"
 #include "Public/PipelineStateCache.h"
 
@@ -25,6 +26,8 @@ FComputeTestExecute::FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLe
 	TmpTexture = RHICreateTexture2D(sizeX, sizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createTmpInfo);
 	TmpTextureUAV = RHICreateUnorderedAccessView(TmpTexture);
 	TmpTextureSRV = RHICreateShaderResourceView(TmpTexture, 0);
+
+	FrequencySize = FIntPoint(FMath::RoundUpToPowerOfTwo(sizeX), FMath::RoundUpToPowerOfTwo(sizeY));
 
 	int output_size = sizeX * sizeY;
 	TResourceArray<FVector4> h0_phi0_data;
@@ -178,10 +181,22 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 			check(IsInRenderingThread());
 			if (SuccessInput)
 			{
-				SuccessInput = MyShader->ExecuteFFT(RHICmdList);
+				SuccessInput = MyShader->ExecuteFFT(RHICmdList, true);
 			}
 		}
 	);
+
+	ENQUEUE_RENDER_COMMAND(InverseFFT)(
+		[MyShader, &SuccessInput](FRHICommandListImmediate& RHICmdList)
+		{
+			check(IsInRenderingThread());
+			if (SuccessInput)
+			{
+				SuccessInput = MyShader->ExecuteFFT(RHICmdList, false);
+			}
+		}
+	);
+	UE_LOG(InternalShaderLog, Warning, TEXT("FFT Computed"));
 	bIsComputeShaderExecuting = false;
 
 }
@@ -223,7 +238,7 @@ bool FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate&
 	
 }
 
-bool FComputeTestExecute::ExecuteFFT(FRHICommandListImmediate& RHICmdList)
+bool FComputeTestExecute::ExecuteFFT(FRHICommandListImmediate& RHICmdList, bool bIsForward)
 {
 	if (bIsUnloading)
 	{
@@ -231,10 +246,12 @@ bool FComputeTestExecute::ExecuteFFT(FRHICommandListImmediate& RHICmdList)
 		return false;
 	}
 
+	MyGPUFFT::FGPUFFTShaderContext FFTContext(RHICmdList, *GetGlobalShaderMap(FeatureLevel));
+	FIntRect SrcRect(FIntPoint(0, 0), FrequencySize);
 	bool SuccessValue = false;
-	bool bIsForward = true;
 	bool bIsHorizontal = true;
-
+	SuccessValue = MyGPUFFT::FFTImage2D(FFTContext, FrequencySize, bIsHorizontal, bIsForward, SrcRect, OutTextureSRV, OutTextureUAV, TmpTextureUAV, TmpTextureSRV);
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, OutTextureUAV);
 	return SuccessValue;
 }
 
