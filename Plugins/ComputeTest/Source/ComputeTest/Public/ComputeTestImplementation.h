@@ -11,7 +11,9 @@ public:
 	void ExecuteComputeShader(UTextureRenderTarget2D* InRenderTarget, FTexture2DRHIRef _inputTexture, const FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget);
 
 	bool ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList);
+	bool ExecuteEWave(FRHICommandListImmediate& RHICmdList);
 	bool ExecuteFFT(FRHICommandListImmediate& RHICmdList, bool bIsForward);
+	bool ExecuteApplyFields(FRHICommandListImmediate& RHICmdList);
 
 	FTexture2DRHIRef GetTexture() { return OutTexture; }
 
@@ -40,6 +42,10 @@ private:
 	FTexture2DRHIRef TmpTexture;
 	FUnorderedAccessViewRHIRef TmpTextureUAV;
 	FShaderResourceViewRHIRef TmpTextureSRV;
+
+	FTexture2DRHIRef WaveTexture;
+	FUnorderedAccessViewRHIRef WaveTextureUAV;
+	FShaderResourceViewRHIRef WaveTextureSRV;
 	
 	FStructuredBufferRHIRef h0_phi0_SB_RW;
 	FUnorderedAccessViewRHIRef h0_phi0_UAV;

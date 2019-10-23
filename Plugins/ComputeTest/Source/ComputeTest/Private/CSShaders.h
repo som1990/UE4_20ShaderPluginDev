@@ -70,14 +70,14 @@ public:
 
 		if (OutputSurface.IsBound())
 			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputSurface.GetBaseIndex(), OutputSurfaceUAV);
-		if (H0_phi0_RW.IsBound())
-			RHICmdList.SetUAVParameter(ComputeShaderRHI, H0_phi0_RW.GetBaseIndex(), Ht0_phi_UAV);
+if (H0_phi0_RW.IsBound())
+RHICmdList.SetUAVParameter(ComputeShaderRHI, H0_phi0_RW.GetBaseIndex(), Ht0_phi_UAV);
 	}
 
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParams = FGlobalShader::Serialize(Ar);
-		Ar << MyColorParameter << OutputSurface 
+		Ar << MyColorParameter << OutputSurface
 			<< TextureParameter << TexMapSampler << H0_phi0_RW;
 		return bShaderHasOutdatedParams;
 	}
@@ -86,12 +86,12 @@ public:
 	{
 		FComputeShaderVariableParameterRef VariableParametersBuffer;
 
-		VariableParametersBuffer = 
+		VariableParametersBuffer =
 			FComputeShaderVariableParameterRef::CreateUniformBufferImmediate(
 				VariableParameters, UniformBuffer_SingleDraw);
 
-		SetUniformBufferParameter(RHICmdList, GetComputeShader(), 
-			GetUniformBufferParameter<FComputeShaderVariableParameters>(), 
+		SetUniformBufferParameter(RHICmdList, GetComputeShader(),
+			GetUniformBufferParameter<FComputeShaderVariableParameters>(),
 			VariableParametersBuffer);
 	}
 
@@ -100,7 +100,7 @@ public:
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
 		if (OutputSurface.IsBound())
 		{
-			RHICmdList.SetUAVParameter(ComputeShaderRHI, 
+			RHICmdList.SetUAVParameter(ComputeShaderRHI,
 				OutputSurface.GetBaseIndex(), FUnorderedAccessViewRHIParamRef());
 		}
 
@@ -121,7 +121,7 @@ public:
 	{
 		return true;
 	}
-	
+
 private:
 	FShaderParameter MyColorParameter;
 	FShaderResourceParameter OutputSurface;
@@ -129,8 +129,204 @@ private:
 	FShaderResourceParameter TextureParameter;
 	FShaderResourceParameter TexMapSampler;
 	FShaderResourceParameter H0_phi0_RW;
+
+
+};
+
+class FCalcEWaveCS : public FGlobalShader
+{
+	DECLARE_SHADER_TYPE(FCalcEWaveCS, Global);
+
+public:
+	FCalcEWaveCS() {}
+	FCalcEWaveCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer) :
+		FGlobalShader(Initializer)
+	{
+		worldGridWidth.Bind(Initializer.ParameterMap, TEXT("worldGridWidth"));
+		worldGridHeight.Bind(Initializer.ParameterMap, TEXT("worldGridHeight"));
+		OutHt_Pt_RW.Bind(Initializer.ParameterMap, TEXT("Out_hT_pT"));
+		InHt_Pt_RO.Bind(Initializer.ParameterMap, TEXT("In_hT_pT"));
+	}
+
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
+
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters,
+		FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.CompilerFlags.Add(CFLAG_StandardOptimization);
+		OutEnvironment.SetDefine(TEXT("CALC_EWAVE"), 1);
+		OutEnvironment.SetDefine(TEXT("THREADS_PER_GROUP"), FCalcEWaveCS::NumThreadsPerGroup());
+	}
+
+	static int32 NumThreadsPerGroup() { return 32; }
+
+	void SetParameters(
+		FRHICommandList& RHICmdList,
+		const float &worldWidth,
+		const float &worldHeight,
+		FShaderResourceViewRHIParamRef InputTextureSRV)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+
+		SetShaderValue(RHICmdList, ComputeShaderRHI, worldGridWidth, worldWidth);
+		SetShaderValue(RHICmdList, ComputeShaderRHI, worldGridHeight, worldHeight);
+
+		if (InHt_Pt_RO.IsBound())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("SRV being set"));
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InHt_Pt_RO.GetBaseIndex(), InputTextureSRV);
+		}
+	}
+
+	void SetOutput(
+		FRHICommandList& RHICmdList,
+		const FUnorderedAccessViewRHIParamRef &OutTextureUAV)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+		if (OutHt_Pt_RW.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutHt_Pt_RW.GetBaseIndex(), OutTextureUAV);
+		}
+	}
+
+	virtual bool Serialize(FArchive& Ar) override
+	{
+		bool bShaderHasOutDatedParams = FGlobalShader::Serialize(Ar);
+		Ar << worldGridWidth << worldGridHeight << OutHt_Pt_RW << InHt_Pt_RO;
+		return bShaderHasOutDatedParams;
+	}
+
+	void SetUniformBuffers(FRHICommandList& RHICmdList, FComputeShaderVariableParameters& VariableParameters)
+	{
+		FComputeShaderVariableParameterRef VariableParametersBuffer;
+
+		VariableParametersBuffer = FComputeShaderVariableParameterRef::CreateUniformBufferImmediate(
+			VariableParameters, UniformBuffer_SingleDraw);
+
+		SetUniformBufferParameter(RHICmdList, GetComputeShader(),
+			GetUniformBufferParameter<FComputeShaderVariableParameters>(),
+			VariableParametersBuffer);
+	}
+
+	void UnbindBuffers(FRHICommandList& RHICmdList)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+		
+		if (OutHt_Pt_RW.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, 
+				OutHt_Pt_RW.GetBaseIndex(), FUnorderedAccessViewRHIParamRef());
+		}
+
+		if (InHt_Pt_RO.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
+				InHt_Pt_RO.GetBaseIndex(), FShaderResourceViewRHIRef());
+		}
+	}
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return true;
+	}
+
+private: 
+	FShaderParameter worldGridWidth;
+	FShaderParameter worldGridHeight;
+
+	FShaderResourceParameter OutHt_Pt_RW;
+	FShaderResourceParameter InHt_Pt_RO;
 	
+};
+
+class FApplyFieldsCS : public FGlobalShader
+{
+	DECLARE_SHADER_TYPE(FApplyFieldsCS, Global);
+public:
+	FApplyFieldsCS() {}
+	FApplyFieldsCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer) :
+		FGlobalShader(Initializer)
+	{
+		inTextureParameter.Bind(Initializer.ParameterMap, TEXT("SrcTexture"));
+		h0_phi0_RW.Bind(Initializer.ParameterMap, TEXT("h0_phi0_RW"));
+	}
+
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
+
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.CompilerFlags.Add(CFLAG_StandardOptimization);
+		OutEnvironment.SetDefine(TEXT("APPLY_HEIGHT"), 1);
+		OutEnvironment.SetDefine(TEXT("THREADS_PER_GROUP"), FApplyFieldsCS::NumThreadsPerGroup());
+	}
+
+	static int32 NumThreadsPerGroup() { return 32; }
+
+	void SetParameters(
+		FRHICommandList& RHICmdList,
+		const FShaderResourceViewRHIParamRef& InTextureSRV
+	)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+
+		if (inTextureParameter.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, inTextureParameter.GetBaseIndex(), InTextureSRV);
+		}
+		
+	}
+
+	void SetOutput(FRHICommandList& RHICmdList, const FUnorderedAccessViewRHIRef& outStructBufferUAV)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+
+		if (h0_phi0_RW.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, h0_phi0_RW.GetBaseIndex(), outStructBufferUAV);
+		}
+	}
 	
+	virtual bool Serialize(FArchive& Ar) override
+	{
+		bool bShaderHasOutdatedParams = FGlobalShader::Serialize(Ar);
+		Ar << inTextureParameter << h0_phi0_RW;
+
+		return bShaderHasOutdatedParams;
+	}
+
+	void UnbindBuffers(FRHICommandList& RHICmdList)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+
+		if (h0_phi0_RW.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI,
+				h0_phi0_RW.GetBaseIndex(), FUnorderedAccessViewRHIRef());
+		}
+
+		if (inTextureParameter.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
+				inTextureParameter.GetBaseIndex(), FShaderResourceViewRHIRef());
+		}
+	}
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return true;
+	}
+
+private:
+	FShaderResourceParameter inTextureParameter;
+	FShaderResourceParameter h0_phi0_RW;
 };
 
 struct FQuadVertex

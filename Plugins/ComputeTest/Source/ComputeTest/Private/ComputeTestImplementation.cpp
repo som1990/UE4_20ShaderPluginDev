@@ -27,6 +27,11 @@ FComputeTestExecute::FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLe
 	TmpTextureUAV = RHICreateUnorderedAccessView(TmpTexture);
 	TmpTextureSRV = RHICreateShaderResourceView(TmpTexture, 0);
 
+	FRHIResourceCreateInfo createEWaveInfo;
+	WaveTexture = RHICreateTexture2D(sizeX, sizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createEWaveInfo);
+	WaveTextureUAV = RHICreateUnorderedAccessView(WaveTexture);
+	WaveTextureSRV = RHICreateShaderResourceView(WaveTexture, 0);
+
 	FrequencySize = FIntPoint(FMath::RoundUpToPowerOfTwo(sizeX), FMath::RoundUpToPowerOfTwo(sizeY));
 
 	int output_size = sizeX * sizeY;
@@ -113,6 +118,24 @@ void FComputeTestExecute::ClearInternalData()
 		TmpTexture.SafeRelease();
 		TmpTexture = NULL;
 	}
+
+	if (WaveTextureUAV != NULL)
+	{
+		WaveTextureUAV.SafeRelease();
+		WaveTextureUAV = NULL;
+	}
+
+	if (WaveTextureSRV != NULL)
+	{
+		WaveTextureSRV.SafeRelease();
+		WaveTextureSRV = NULL;
+	}
+
+	if (WaveTexture != NULL)
+	{
+		WaveTexture.SafeRelease();
+		WaveTexture = NULL;
+	}
 }
 
 void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRenderTarget, FTexture2DRHIRef inputTexture, const FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget)
@@ -150,7 +173,7 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 	ENQUEUE_RENDER_COMMAND(ComputeShaderRun)(
 		[MyShader, rtInput, &SuccessInput](FRHICommandListImmediate& RHICmdList)
 		{
-			check(IsInRenderingThread());
+			
 			FTexture2DRHIRef rtTexture = nullptr;
 			if (rtInput->bUseRenderTarget)
 			{
@@ -178,7 +201,7 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 	ENQUEUE_RENDER_COMMAND(ForwardFFT)(
 		[MyShader, &SuccessInput](FRHICommandListImmediate& RHICmdList)
 		{
-			check(IsInRenderingThread());
+			
 			if (SuccessInput)
 			{
 				SuccessInput = MyShader->ExecuteFFT(RHICmdList, true);
@@ -186,13 +209,35 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 		}
 	);
 
+	ENQUEUE_RENDER_COMMAND(CalcEWave)(
+		[MyShader, &SuccessInput](FRHICommandListImmediate& RHICmdList)
+		{
+			
+			if (SuccessInput)
+			{
+				SuccessInput = MyShader->ExecuteEWave(RHICmdList);
+			}
+		}
+	);
+
 	ENQUEUE_RENDER_COMMAND(InverseFFT)(
 		[MyShader, &SuccessInput](FRHICommandListImmediate& RHICmdList)
 		{
-			check(IsInRenderingThread());
+			
 			if (SuccessInput)
 			{
 				SuccessInput = MyShader->ExecuteFFT(RHICmdList, false);
+			}
+		}
+	);
+
+	ENQUEUE_RENDER_COMMAND(ApplyField)(
+		[MyShader, &SuccessInput](FRHICommandListImmediate& RHICmdList)
+		{
+			
+			if (SuccessInput)
+			{
+				SuccessInput = MyShader->ExecuteApplyFields(RHICmdList);
 			}
 		}
 	);
@@ -203,7 +248,7 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 
 bool FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList)
 {
-	
+	check(IsInRenderingThread());
 	if (bIsUnloading)
 	{
 		ClearInternalData();
@@ -232,14 +277,41 @@ bool FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate&
 	//RHICmdList.DispatchComputeShader(InputTexture->GetSizeX()/8, InputTexture->GetSizeY()/8,1);
 	DispatchComputeShader(RHICmdList, *ComputeShader, FMath::CeilToInt(InputTexture->GetSizeX() / NUM_THREADS_PER_GROUP), FMath::CeilToInt(InputTexture->GetSizeY() / NUM_THREADS_PER_GROUP), 1);
 	ComputeShader->UnbindBuffers(RHICmdList);
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, OutTextureUAV);
 
 	
 	return true;
 	
 }
 
+bool FComputeTestExecute::ExecuteEWave(FRHICommandListImmediate& RHICmdList)
+{
+	check(IsInRenderingThread());
+	if (bIsUnloading)
+	{
+		ClearInternalData();
+		return false;
+	}
+	//RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier, EResourceTransitionPipeline::EComputeToCompute, OutTextureUAV);
+
+	TShaderMapRef<FCalcEWaveCS> ComputeShader(GetGlobalShaderMap(FeatureLevel));
+	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
+
+	ComputeShader->SetParameters(RHICmdList, 1.0f, 1.0f, OutTextureSRV);
+	ComputeShader->SetOutput(RHICmdList, WaveTextureUAV);
+	ComputeShader->SetUniformBuffers(RHICmdList, m_VariableParameters);
+	//UE_LOG(LogTemp, Warning, TEXT("OutTextureDims: %d, %d"), FMath::CeilToInt(512 / NUM_THREADS_PER_GROUP), FMath::CeilToInt(512 / NUM_THREADS_PER_GROUP));
+	DispatchComputeShader(RHICmdList, *ComputeShader, FMath::CeilToInt(OutTexture->GetSizeX() / NUM_THREADS_PER_GROUP), FMath::CeilToInt(OutTexture->GetSizeY() / NUM_THREADS_PER_GROUP), 1);
+	ComputeShader->UnbindBuffers(RHICmdList);
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, WaveTextureUAV);
+
+	return true;
+}
+
 bool FComputeTestExecute::ExecuteFFT(FRHICommandListImmediate& RHICmdList, bool bIsForward)
 {
+	check(IsInRenderingThread());
+
 	if (bIsUnloading)
 	{
 		ClearInternalData();
@@ -248,10 +320,40 @@ bool FComputeTestExecute::ExecuteFFT(FRHICommandListImmediate& RHICmdList, bool 
 
 	MyGPUFFT::FGPUFFTShaderContext FFTContext(RHICmdList, *GetGlobalShaderMap(FeatureLevel));
 	FIntRect SrcRect(FIntPoint(0, 0), FrequencySize);
-	bool SuccessValue = false;
+	bool SuccessValue = true;
 	bool bIsHorizontal = true;
-	SuccessValue = MyGPUFFT::FFTImage2D(FFTContext, FrequencySize, bIsHorizontal, bIsForward, SrcRect, OutTextureSRV, OutTextureUAV, TmpTextureUAV, TmpTextureSRV);
+	if (bIsForward)
+	{
+		SuccessValue = MyGPUFFT::FFTImage2D(FFTContext, FrequencySize, bIsHorizontal, bIsForward, SrcRect, OutTextureSRV, OutTextureUAV, TmpTextureUAV, TmpTextureSRV);
+	}
+	else
+	{
+		SuccessValue = MyGPUFFT::FFTImage2D(FFTContext, FrequencySize, bIsHorizontal, bIsForward, SrcRect, WaveTextureSRV, OutTextureUAV, TmpTextureUAV, TmpTextureSRV);
+
+	}
 	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, OutTextureUAV);
 	return SuccessValue;
+}
+
+bool FComputeTestExecute::ExecuteApplyFields(FRHICommandListImmediate& RHICmdList)
+{
+	check(IsInRenderingThread());
+
+	if (bIsUnloading)
+	{
+		return false;
+	}
+
+	TShaderMapRef<FApplyFieldsCS> ComputeShader(GetGlobalShaderMap(FeatureLevel));
+	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
+
+	ComputeShader->SetParameters(RHICmdList, OutTextureSRV);
+	ComputeShader->SetOutput(RHICmdList, h0_phi0_UAV);
+
+	DispatchComputeShader(RHICmdList, *ComputeShader, FMath::CeilToInt(OutTexture->GetSizeX() / NUM_THREADS_PER_GROUP), FMath::CeilToInt(OutTexture->GetSizeY() / NUM_THREADS_PER_GROUP), 1);
+	ComputeShader->UnbindBuffers(RHICmdList);
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, h0_phi0_UAV);
+
+	return true;
 }
 

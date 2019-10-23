@@ -37,3 +37,93 @@ void AddSourceHeightCS(uint3 ThreadId : SV_DispatchThreadID)
 }
 
 #endif //ADD_SOURCE_HEIGHTFIELD
+
+#ifdef CALC_EWAVE
+
+#define Texture2DType Texture2D<float4>
+#define RWTexture2DType RWTexture2D<float4>
+
+#define GRAV 9.80665f
+#define PI 3.1415926535897932f
+
+//Grid Size in meters
+float worldGridWidth, worldGridHeight;
+
+// Complex Texture input. 2 complex signals (h and phi): R + iG , B + iA 
+Texture2DType In_hT_pT;
+
+RWTexture2DType Out_hT_pT;
+
+
+[numthreads(THREADS_PER_GROUP, THREADS_PER_GROUP,1)]
+void CalcEWaveCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+
+    float width, height;
+    In_hT_pT.GetDimensions(width, height);
+    
+    if ((ThreadId.x >= width) || (ThreadId.y >= height)) { return; }
+
+    uint i = ThreadId.x;
+    uint j = ThreadId.y;
+
+    float dkx = 2.0f * PI/10.0f;
+    float dky = 2.0f * PI/10.0f;
+
+    float kx, ky;
+    if( float(i) <= width/2.0) kx = i * dkx;
+    else kx = (i - width) * dkx;
+
+    if (float(j) <= height/2.0) ky = j * dky;
+    else ky = (j - height) * dky;
+
+    //float n = ThreadId.x - 256.0f;
+    //float m = ThreadId.y - 256.0f;
+    uint index = i + j*width;
+    //kx = 2 * PI * n/ 512.0f;
+    //ky = 2 * PI * m/ 512.0f;
+
+    float mk = sqrt(kx*kx + ky*ky);
+
+    float w = sqrt(GRAV*mk);
+    float4 ht_pt = In_hT_pT[ThreadId.xy];
+    float coswk, sinwk;
+    sincos(w*CSVariables.deltaTime, sinwk, coswk);
+    float2 hT, pT;
+    if (mk != 0)
+    {
+        hT.x = coswk*ht_pt.r + (mk / w) * sinwk * ht_pt.b; // h.real
+        hT.y = coswk*ht_pt.g + (mk / w) * sinwk * ht_pt.a; // h.imag
+        
+        pT.x = coswk*ht_pt.b - (GRAV / w) * sinwk * ht_pt.r; // phi.real
+        pT.y = coswk*ht_pt.a - (GRAV / w) * sinwk * ht_pt.g; // phi.imag
+
+        //Out_hT_pT[ThreadId.xy] = float4(In_hT_pT[ThreadId.xy].x,In_hT_pT[ThreadId.xy].y, 0.0, 0.0 );
+
+        Out_hT_pT[ThreadId.xy] = float4(hT.x,hT.y, pT.x, pT.y);
+    }
+}
+
+#endif //CALC_EWAVE
+
+#ifdef APPLY_HEIGHT
+
+#define SRCTYPE float4
+
+#define Texture2DType Texture2D<SRCTYPE>
+
+Texture2DType SrcTexture;
+
+RWStructuredBuffer<float4> h0_phi0_RW;
+
+[numthreads(THREADS_PER_GROUP, THREADS_PER_GROUP,1)]
+void ApplyFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+    int width, height;
+
+    SrcTexture.GetDimensions(width, height);
+    int idx = ThreadId.x  + ThreadId.y * width;
+
+    h0_phi0_RW[idx] = SrcTexture[ThreadId.xy];
+}
+#endif //APPLY_HEIGHT

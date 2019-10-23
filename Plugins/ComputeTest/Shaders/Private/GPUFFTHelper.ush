@@ -172,6 +172,7 @@ void CopyDataSrcWindowToLocal(inout Complex LocalBuffer[2][RADIX], bool bIsHoriz
 	if (bIsHorizontal) 
 	{
 		uint2 Pixel = uint2(Loc, ScanIdx) + uint2(WindowMin.x, 0);
+	
 		UNROLL
 		for (uint i = 0; i < RADIX; ++i, Pixel.x += Stride)
 		{	
