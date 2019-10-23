@@ -25,7 +25,9 @@ public:
 		FGlobalShader(Initializer)
 	{
 		MyColorParameter.Bind(Initializer.ParameterMap, TEXT("MyColor"));
+		bUseObsMap.Bind(Initializer.ParameterMap, TEXT("bUseObsMap"));
 		OutputSurface.Bind(Initializer.ParameterMap, TEXT("OutputSurface"));
+		ObstructionParm.Bind(Initializer.ParameterMap, TEXT("SrcObstruction"));
 		TextureParameter.Bind(Initializer.ParameterMap, TEXT("SrcTexture"));
 		TexMapSampler.Bind(Initializer.ParameterMap, TEXT("TexMapSampler"));
 		H0_phi0_RW.Bind(Initializer.ParameterMap, TEXT("h0_phi_RW"));
@@ -49,18 +51,30 @@ public:
 	void SetParameters(
 		FRHICommandList& RHICmdList,
 		const FLinearColor& Color,
-		FShaderResourceViewRHIParamRef TextureParameterSRV
+		uint32 useObsMap,
+		const FShaderResourceViewRHIParamRef& TextureParameterSRV,
+		const FShaderResourceViewRHIParamRef& ObstructionParmSRV
 		)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
 
 		SetShaderValue(RHICmdList, ComputeShaderRHI, MyColorParameter, Color);
+		SetShaderValue(RHICmdList, ComputeShaderRHI, bUseObsMap, useObsMap);
 		if (TextureParameter.IsBound())
 		{
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, TextureParameter.GetBaseIndex(), TextureParameterSRV);
 			FSamplerStateRHIParamRef SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 			SetSamplerParameter(RHICmdList, ComputeShaderRHI, TexMapSampler, SamplerStateLinear);
 			
+		}
+		if (ObstructionParm.IsBound() )
+		{
+			if (useObsMap){
+				RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, ObstructionParm.GetBaseIndex(), ObstructionParmSRV);
+			}
+			else {
+				RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, ObstructionParm.GetBaseIndex(), FShaderResourceViewRHIRef());
+			}
 		}
 	}
 
@@ -70,15 +84,15 @@ public:
 
 		if (OutputSurface.IsBound())
 			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputSurface.GetBaseIndex(), OutputSurfaceUAV);
-if (H0_phi0_RW.IsBound())
-RHICmdList.SetUAVParameter(ComputeShaderRHI, H0_phi0_RW.GetBaseIndex(), Ht0_phi_UAV);
+		if (H0_phi0_RW.IsBound())
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, H0_phi0_RW.GetBaseIndex(), Ht0_phi_UAV);
 	}
 
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParams = FGlobalShader::Serialize(Ar);
-		Ar << MyColorParameter << OutputSurface
-			<< TextureParameter << TexMapSampler << H0_phi0_RW;
+		Ar << MyColorParameter << bUseObsMap << OutputSurface
+			<< ObstructionParm << TextureParameter << TexMapSampler << H0_phi0_RW;
 		return bShaderHasOutdatedParams;
 	}
 
@@ -115,6 +129,12 @@ RHICmdList.SetUAVParameter(ComputeShaderRHI, H0_phi0_RW.GetBaseIndex(), Ht0_phi_
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
 				TextureParameter.GetBaseIndex(), FShaderResourceViewRHIRef());
 		}
+
+		if (ObstructionParm.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
+				ObstructionParm.GetBaseIndex(), FShaderResourceViewRHIRef());
+		}
 	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -124,8 +144,10 @@ RHICmdList.SetUAVParameter(ComputeShaderRHI, H0_phi0_RW.GetBaseIndex(), Ht0_phi_
 
 private:
 	FShaderParameter MyColorParameter;
+	FShaderParameter bUseObsMap;
 	FShaderResourceParameter OutputSurface;
 
+	FShaderResourceParameter ObstructionParm;
 	FShaderResourceParameter TextureParameter;
 	FShaderResourceParameter TexMapSampler;
 	FShaderResourceParameter H0_phi0_RW;

@@ -14,9 +14,15 @@ FComputeTestExecute::FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLe
 	bIsUnloading = false;
 	bIsComputeShaderExecuting = false;
 	bMustRegenerateSRV = false;
-	
+	bMustRegenerateObsSRV = false;
+	bUseObsMap = true;
+
 	InputTexture = NULL;
 	InTextureSRV = NULL;
+
+	ObsTexture = NULL;
+	ObsTextureSRV = NULL;
+
 	FRHIResourceCreateInfo createInfo;
 	OutTexture = RHICreateTexture2D(sizeX, sizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createInfo);
 	OutTextureUAV = RHICreateUnorderedAccessView(OutTexture);
@@ -136,9 +142,21 @@ void FComputeTestExecute::ClearInternalData()
 		WaveTexture.SafeRelease();
 		WaveTexture = NULL;
 	}
+
+	if (ObsTextureSRV != NULL)
+	{
+		ObsTextureSRV.SafeRelease();
+		ObsTextureSRV = NULL;
+	}
+
+	if (ObsTexture != NULL)
+	{
+		ObsTexture.SafeRelease();
+		ObsTexture = NULL;
+	}
 }
 
-void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRenderTarget, FTexture2DRHIRef inputTexture, const FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget)
+void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRenderTarget, FTexture2DRHIRef inputTexture, FTexture2DRHIRef _obsTexture, FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget)
 {
 	check(IsInGameThread());
 
@@ -151,6 +169,15 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 		return;
 	bIsComputeShaderExecuting = true;
 
+	if (_obsTexture != NULL)
+	{
+		bUseObsMap = true;
+	}
+	else
+	{
+		bUseObsMap = false;
+	}
+
 	inColor = FLinearColor(DisplayColor.R / 255.0, DisplayColor.G / 255.0, DisplayColor.B / 255.0, DisplayColor.A / 255.0);
 	UE_LOG(InternalShaderLog, Warning, TEXT("Shader Variables Initialized"));
 
@@ -161,11 +188,15 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 		UTextureRenderTarget2D* inputRT;
 		bool bUseRenderTarget;
 		FTexture2DRHIRef inTexture;
+		bool bUseObsMap;
+		FTexture2DRHIRef obsTexture;
 	};
 	RenderTargetInput* rtInput = new RenderTargetInput();
 	rtInput->inputRT = inputRenderTarget;
 	rtInput->bUseRenderTarget = bUseRenderTarget;
 	rtInput->inTexture = inputTexture;
+	rtInput->obsTexture = _obsTexture;
+	rtInput->bUseObsMap = bUseObsMap;
 	FComputeTestExecute* MyShader = this;
 
 	bool SuccessInput = true;
@@ -192,8 +223,14 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 				}
 				MyShader->InputTexture = rtInput->inTexture;
 			}
-			
-			  
+			if (rtInput->bUseObsMap)
+			{
+				if (MyShader->ObsTexture != rtInput->obsTexture)
+				{
+					MyShader->bMustRegenerateObsSRV = true;
+				}
+				MyShader->ObsTexture = rtInput->obsTexture;
+			}
 			SuccessInput = MyShader->ExecuteComputeShaderInternal(RHICmdList);
 		}
 	);
@@ -267,11 +304,21 @@ bool FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate&
 		InTextureSRV = RHICreateShaderResourceView(InputTexture, 0);
 	}
 
+	if (bMustRegenerateObsSRV)
+	{
+		if (NULL != ObsTextureSRV)
+		{
+			ObsTextureSRV.SafeRelease();
+			ObsTextureSRV = NULL;
+		}
+
+		ObsTextureSRV = RHICreateShaderResourceView(ObsTexture, 0);
+	}
 	
 	TShaderMapRef<FAddSourceHeightCS> ComputeShader(GetGlobalShaderMap(FeatureLevel));
 	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
 
-	ComputeShader->SetParameters(RHICmdList, inColor, InTextureSRV);
+	ComputeShader->SetParameters(RHICmdList, inColor, bUseObsMap, InTextureSRV, ObsTextureSRV);
 	ComputeShader->SetOutput(RHICmdList, OutTextureUAV, h0_phi0_UAV);
 	ComputeShader->SetUniformBuffers(RHICmdList, m_VariableParameters);
 	//RHICmdList.DispatchComputeShader(InputTexture->GetSizeX()/8, InputTexture->GetSizeY()/8,1);

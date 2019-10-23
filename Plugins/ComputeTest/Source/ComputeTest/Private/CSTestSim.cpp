@@ -32,6 +32,11 @@ void ACSTestSim::BeginDestroy()
 	if (testComputeShader) {
 		delete testComputeShader;
 	}
+	if (testDisplayShader)
+	{
+		delete testDisplayShader;
+	}
+
 	if (InputTexture)
 	{
 		InputTexture.SafeRelease();
@@ -42,12 +47,18 @@ void ACSTestSim::BeginDestroy()
 		Texture2Display->ConditionalBeginDestroy();
 		Texture2Display = NULL;
 	}
+	if (ObsTexture)
+	{
+		ObsTexture.SafeRelease();
+		ObsTexture = NULL;
+	}
 
 }
 
-void ACSTestSim::LoadHeightMapSource(float _magnitude, float _delTime, UTexture2D* SourceMap, FColor DisplayColor, UTextureRenderTarget2D* InRenderTarget, bool bUseRenderTarget)
+void ACSTestSim::LoadHeightMapSource(float _magnitude, float _delTime, UTexture2D* SourceMap, UTexture2D* ObsMap, FColor DisplayColor, UTextureRenderTarget2D* InRenderTarget, bool bUseRenderTarget)
 {
 	check(IsInGameThread());
+	bUseObsMap = true;
 	int sizeX, sizeY;
 	if (bUseRenderTarget)
 	{
@@ -59,11 +70,22 @@ void ACSTestSim::LoadHeightMapSource(float _magnitude, float _delTime, UTexture2
 		sizeX = SourceMap->GetSizeX();
 		sizeY = SourceMap->GetSizeY();
 	}
-	if (sizeX != texSizeX || sizeY != texSizeY)
+	if (sizeX != texSizeX || sizeY != texSizeY )
 	{
 		UE_LOG(ComputeLog, Error, TEXT("Set Dimensions don't match input texture map. Returning."));
 		bIsTextureDimensionsSet = false;
 		return;
+	}
+	if (ObsMap)
+	{
+		if (ObsMap->GetSizeX() != texSizeX || ObsMap->GetSizeY() != texSizeY)
+		{
+			UE_LOG(ComputeLog, Warning, TEXT("Obstruction Map not provided"));
+			bUseObsMap = false;
+		}
+	}
+	else {
+		bUseObsMap = false;
 	}
 	if (!bIsTextureDimensionsSet)
 	{
@@ -78,7 +100,19 @@ void ACSTestSim::LoadHeightMapSource(float _magnitude, float _delTime, UTexture2
 		InputTexture = NULL;
 		UE_LOG(ComputeLog, Warning, TEXT("InputTexture Reset."));
 	}
+
+	if (ObsTexture != NULL)
+	{
+		ObsTexture.SafeRelease();
+		ObsTexture = NULL;
+		UE_LOG(ComputeLog, Warning, TEXT("Obstruction Texture Reset."));
+	}
 	
+	if (bUseObsMap)
+	{
+		ObsTexture = static_cast<FTexture2DResource*>(ObsMap->Resource)->GetTexture2DRHI();
+	}
+
 	InputTexture = static_cast<FTexture2DResource*>(SourceMap->Resource)->GetTexture2DRHI();
 	
 	UE_LOG(ComputeLog, Warning, TEXT("RHITexture2D Extracted, Dimensions: %d, %d"), SourceMap->PlatformData->Mips[0].SizeX, SourceMap->PlatformData->Mips[0].SizeY);
@@ -86,7 +120,7 @@ void ACSTestSim::LoadHeightMapSource(float _magnitude, float _delTime, UTexture2
 	{
 		//FTexture2DResource* uTex2DRes = static_cast<FTexture2DResource*>(SourceMap->Resource);
 		
-		testComputeShader->ExecuteComputeShader(InRenderTarget,InputTexture, DisplayColor, _magnitude, _delTime, bUseRenderTarget);
+		testComputeShader->ExecuteComputeShader(InRenderTarget,InputTexture, ObsTexture, DisplayColor,  _magnitude, _delTime, bUseRenderTarget);
 		
 		//FlushRenderingCommands();
 		UE_LOG(ComputeLog, Warning, TEXT("Shader Computed."));

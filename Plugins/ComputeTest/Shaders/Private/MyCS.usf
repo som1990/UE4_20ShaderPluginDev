@@ -2,6 +2,33 @@
 
 #include "/Engine/Private/Common.ush"
 
+float boundaryConditions(uint x, uint y, uint width, uint height )
+{
+    const float alpha = 0.05f;
+
+    float x0 = float(x) ; float x1 = float(width - x);
+    float y0 = float(y) ; float y1 = float(height - y);
+
+    float leftBound, rightBound, topBound, bottomBound;
+
+    leftBound = rightBound = bottomBound = topBound = 0;
+
+    float padX = .1f * width;
+    float padY = .1f * height;
+
+    if (x0 >= 0.0f) 
+        leftBound = clamp(pow(x0/padX, alpha ),0.0f, 1.0f);
+    if (x1 >= 0.0f)
+        rightBound = clamp(pow(x1/padX, alpha ),0.0f, 1.0f);
+    if (y0 >= 0.0f)
+        bottomBound = clamp(pow(y0/padY, alpha),0.0f, 1.0f);
+    if (y1 >= 0.0f)
+        topBound = clamp(pow(y1/padY, alpha),0.0f, 1.0f);
+
+    return (topBound*bottomBound*rightBound*leftBound);
+
+}
+
 #ifdef ADD_SOURCE_HEIGHTFIELD
 
 #define SRCTYPE float4
@@ -11,8 +38,10 @@
 #define RWTexture2DType RWTexture2D<DSTTYPE>
 
 float4 MyColor;
+uint bUseObsMap;
 RWTexture2DType OutputSurface;
 
+Texture2DType SrcObstruction;
 Texture2DType SrcTexture;
 SamplerState TexMapSampler;
 RWStructuredBuffer<float4> h0_phi_RW;
@@ -24,15 +53,29 @@ void AddSourceHeightCS(uint3 ThreadId : SV_DispatchThreadID)
 {
     float4 dstpixel = MyColor;
     
-    float width, height;
+    int width, height;
     SrcTexture.GetDimensions(width, height);
-    int idx = ThreadId.x  + ThreadId.y * width;
-    float2 uv = float2(ThreadId.xy)/ float2(width, height);
-    float4 output = SrcTexture[ThreadId.xy];//SrcTexture.SampleLevel(TexMapSampler, uv,0);
+    uint idx = ThreadId.x  + ThreadId.y * width;
+    
+    //Calculate boundary conditions
+    float bound = boundaryConditions(ThreadId.x, ThreadId.y, width, height);
+
+    //Calculate obstruction map
+    float4 obsHeight = 0.0f;
+    if(bUseObsMap){
+        obsHeight = clamp(1.0f- SrcObstruction[ThreadId.xy],0.0f,1.0f) * -h0_phi_RW[idx];
+    }
+    float2 uv = float2(ThreadId.xy)/ float2(width * 1.0f, height *1.0f);
+    float4 output = SrcTexture[ThreadId.xy];
     float4 pixColor = float4(output.x,0.0f,0.0f,0.0f)*CSVariables.mag*CSVariables.deltaTime;
-    h0_phi_RW[idx] += pixColor;
-    OutputSurface[ThreadId.xy] = h0_phi_RW[idx]; //SrcTexture.SampleLevel(TexMapSampler, uv,0);
-    //OutputSurface[ThreadId.xy] = float4(10,0,0,1);
+    
+    //Apply Obstruction Maps
+    h0_phi_RW[idx] += pixColor + obsHeight;
+    
+    //Apply Boundary Conditions
+    h0_phi_RW[idx] *= bound; 
+    OutputSurface[ThreadId.xy] = h0_phi_RW[idx]; 
+
     return;
 }
 
@@ -67,8 +110,8 @@ void CalcEWaveCS(uint3 ThreadId : SV_DispatchThreadID)
     uint i = ThreadId.x;
     uint j = ThreadId.y;
 
-    float dkx = 2.0f * PI/10.0f;
-    float dky = 2.0f * PI/10.0f;
+    float dkx = 2.0f * PI/1.0f;
+    float dky = 2.0f * PI/1.0f;
 
     float kx, ky;
     if( float(i) <= width/2.0) kx = i * dkx;

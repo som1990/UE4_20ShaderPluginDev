@@ -68,7 +68,7 @@ void AMyMovementPawn::Tick(float DeltaTime)
 	
 		IgnoreActor.Add(this);
 		//bool hit = GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, CollisionParams);
-		bool hit = UKismetSystemLibrary::LineTraceSingle(GetWorld(), Start, End, ETraceTypeQuery::TraceTypeQuery1, true, IgnoreActor, EDrawDebugTrace::ForDuration, OutHit, true);
+		bool hit = UKismetSystemLibrary::LineTraceSingle(GetWorld(), Start, End, ETraceTypeQuery::TraceTypeQuery1, true, IgnoreActor, EDrawDebugTrace::None, OutHit, true);
 
 		if (hit && TextureMesh)
 		{
