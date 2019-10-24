@@ -8,7 +8,10 @@ public:
 	FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLevel::Type ShaderFeatureLevel);
 	~FComputeTestExecute();
 
-	void ExecuteComputeShader(UTextureRenderTarget2D* InRenderTarget, FTexture2DRHIRef _inputTexture, FTexture2DRHIRef _obsTexture, FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget);
+	void ExecuteComputeShader(
+		UTextureRenderTarget2D* InRenderTarget, FTexture2DRHIRef _inputTexture, 
+		FTexture2DRHIRef _obsTexture, FTexture2DRHIRef _flowMap,
+		FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget);
 
 	bool ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList);
 	bool ExecuteEWave(FRHICommandListImmediate& RHICmdList);
@@ -27,7 +30,9 @@ private:
 	bool bSimulatorInitialized;
 	bool bMustRegenerateSRV;
 	bool bMustRegenerateObsSRV;
+	bool bMustRegenerateFlowSRV;
 	bool bUseObsMap;
+	bool bUseFlowMap;
 
 	FIntPoint FrequencySize;
 
@@ -44,6 +49,9 @@ private:
 
 	FTexture2DRHIRef ObsTexture;
 	FShaderResourceViewRHIRef ObsTextureSRV;
+
+	FTexture2DRHIRef FlowTexture;
+	FShaderResourceViewRHIRef FlowTextureSRV;
 
 	FTexture2DRHIRef TmpTexture;
 	FUnorderedAccessViewRHIRef TmpTextureUAV;

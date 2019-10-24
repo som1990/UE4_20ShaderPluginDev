@@ -20,7 +20,10 @@ public:
 	// Sets default values for this actor's properties
 	ACSTestSim();
 	UFUNCTION(BlueprintCallable, Category = "SGPlugin|LoadSource")
-		void LoadHeightMapSource(float _magnitude, float _delTime, UTexture2D* SourceMap, UTexture2D* ObsMap, FColor DisplayColor, UTextureRenderTarget2D* InRenderTarget, bool buseRenderTarget);
+		void LoadHeightMapSource(
+			float _magnitude, float _delTime, UTexture2D* SourceMap, 
+			UTexture2D* ObsMap, UTexture2D* FlowMap, FColor DisplayColor, 
+			UTextureRenderTarget2D* InRenderTarget, bool buseRenderTarget);
 
 	UFUNCTION(BlueprintCallable, Category = "SGPlugin|PreviewTexture")
 		void GeneratePreviewTexture(UTexture2D* &OutTexture);
@@ -52,9 +55,11 @@ protected:
 	UTexture2D* Texture2Display;
 
 	FTexture2DRHIRef ObsTexture;
-	
+	FTexture2DRHIRef FlowTexture;
+
 	bool bIsTextureGeneratingExecuting;
 	bool bIsTextureDimensionsSet;
 	bool bUseObsMap;
+	bool bUseFlowMap;
 
 };

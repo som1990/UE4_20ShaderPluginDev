@@ -45,17 +45,21 @@ void AMyMovementPawn::BeginDestroy()
 void AMyMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
+	bool test = IsValid(this);
 	//Block taking care of Movement
 	if (!CurrentVelocity.IsZero())
 	{
 		FVector NewLocation = GetActorLocation() + (CurrentVelocity*DeltaTime);
-		SetActorLocation(NewLocation);
+		
+		if (test)
+		{
+			SetActorLocation(NewLocation);
+		}
 	}
 	
 	//Calc Magnitude
 	mag = CurrentVelocity.Size();
-
+	/*
 	//Block for transferring Position to Texture
 	{
 		FHitResult OutHit;
@@ -102,7 +106,7 @@ void AMyMovementPawn::Tick(float DeltaTime)
 			mag = 0;
 		}
 	}
-
+	*/
 }
 
 // Called to bind functionality to input

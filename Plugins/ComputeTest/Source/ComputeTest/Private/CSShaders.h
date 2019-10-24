@@ -199,7 +199,7 @@ public:
 
 		if (InHt_Pt_RO.IsBound())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("SRV being set"));
+			//UE_LOG(LogTemp, Warning, TEXT("SRV being set"));
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InHt_Pt_RO.GetBaseIndex(), InputTextureSRV);
 		}
 	}
@@ -274,7 +274,10 @@ public:
 		FGlobalShader(Initializer)
 	{
 		inTextureParameter.Bind(Initializer.ParameterMap, TEXT("SrcTexture"));
+		flowMapParameter.Bind(Initializer.ParameterMap, TEXT("FlowMap"));
+		inTexSampler.Bind(Initializer.ParameterMap, TEXT("SrcSampler"));
 		h0_phi0_RW.Bind(Initializer.ParameterMap, TEXT("h0_phi0_RW"));
+		bUseFlowMap.Bind(Initializer.ParameterMap, TEXT("bUseFlowMap"));
 	}
 
 	static bool ShouldCache(EShaderPlatform Platform)
@@ -294,15 +297,34 @@ public:
 
 	void SetParameters(
 		FRHICommandList& RHICmdList,
-		const FShaderResourceViewRHIParamRef& InTextureSRV
+		const FShaderResourceViewRHIParamRef& InTextureSRV,
+		const FShaderResourceViewRHIParamRef& _flowMapParameter,
+		uint32 _bUseFlowMap
 	)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
-
+		SetShaderValue(RHICmdList, ComputeShaderRHI, bUseFlowMap, _bUseFlowMap);
 		if (inTextureParameter.IsBound())
 		{
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, inTextureParameter.GetBaseIndex(), InTextureSRV);
+			FSamplerStateRHIParamRef SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+			SetSamplerParameter(RHICmdList, ComputeShaderRHI, inTexSampler, SamplerStateLinear);
 		}
+
+		if (flowMapParameter.IsBound())
+		{
+			if (_flowMapParameter != NULL)
+			{
+				RHICmdList.SetShaderResourceViewParameter(
+					ComputeShaderRHI, flowMapParameter.GetBaseIndex(), _flowMapParameter);
+			}
+			else
+			{
+				RHICmdList.SetShaderResourceViewParameter(
+					ComputeShaderRHI, flowMapParameter.GetBaseIndex(),FShaderResourceViewRHIRef());
+			}
+		}
+		
 		
 	}
 
@@ -319,9 +341,22 @@ public:
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParams = FGlobalShader::Serialize(Ar);
-		Ar << inTextureParameter << h0_phi0_RW;
+		Ar << inTextureParameter << flowMapParameter << inTexSampler 
+		   << h0_phi0_RW << bUseFlowMap;
 
 		return bShaderHasOutdatedParams;
+	}
+
+	void SetUniformBuffers(FRHICommandList& RHICmdList, FComputeShaderVariableParameters& VariableParameters)
+	{
+		FComputeShaderVariableParameterRef VariableParametersBuffer;
+
+		VariableParametersBuffer = FComputeShaderVariableParameterRef::CreateUniformBufferImmediate(
+			VariableParameters, UniformBuffer_SingleDraw);
+
+		SetUniformBufferParameter(RHICmdList, GetComputeShader(),
+			GetUniformBufferParameter<FComputeShaderVariableParameters>(),
+			VariableParametersBuffer);
 	}
 
 	void UnbindBuffers(FRHICommandList& RHICmdList)
@@ -339,6 +374,12 @@ public:
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
 				inTextureParameter.GetBaseIndex(), FShaderResourceViewRHIRef());
 		}
+
+		if (flowMapParameter.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
+				flowMapParameter.GetBaseIndex(), FShaderResourceViewRHIRef());
+		}
 	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -348,7 +389,11 @@ public:
 
 private:
 	FShaderResourceParameter inTextureParameter;
+	FShaderResourceParameter flowMapParameter;
+	FShaderResourceParameter inTexSampler;
 	FShaderResourceParameter h0_phi0_RW;
+
+	FShaderParameter bUseFlowMap;
 };
 
 struct FQuadVertex

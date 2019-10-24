@@ -63,7 +63,7 @@ void AddSourceHeightCS(uint3 ThreadId : SV_DispatchThreadID)
     //Calculate obstruction map
     float4 obsHeight = 0.0f;
     if(bUseObsMap){
-        obsHeight = clamp(1.0f- SrcObstruction[ThreadId.xy],0.0f,1.0f) * -h0_phi_RW[idx];
+        obsHeight = clamp(SrcObstruction[ThreadId.xy],0.0f,1.0f) * -h0_phi_RW[idx];
     }
     float2 uv = float2(ThreadId.xy)/ float2(width * 1.0f, height *1.0f);
     float4 output = SrcTexture[ThreadId.xy];
@@ -110,7 +110,8 @@ void CalcEWaveCS(uint3 ThreadId : SV_DispatchThreadID)
     uint i = ThreadId.x;
     uint j = ThreadId.y;
 
-    float dkx = 2.0f * PI/1.0f;
+    //TODO: Need to implement size of Grid in World Size (Lx, Ly)
+    float dkx = 2.0f * PI/1.0f; 
     float dky = 2.0f * PI/1.0f;
 
     float kx, ky;
@@ -156,8 +157,11 @@ void CalcEWaveCS(uint3 ThreadId : SV_DispatchThreadID)
 #define Texture2DType Texture2D<SRCTYPE>
 
 Texture2DType SrcTexture;
-
+Texture2DType FlowMap;
+SamplerState SrcSampler;
 RWStructuredBuffer<float4> h0_phi0_RW;
+
+uint bUseFlowMap;
 
 [numthreads(THREADS_PER_GROUP, THREADS_PER_GROUP,1)]
 void ApplyFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
@@ -166,7 +170,33 @@ void ApplyFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
 
     SrcTexture.GetDimensions(width, height);
     int idx = ThreadId.x  + ThreadId.y * width;
+    float4 value = 0.0f;
+    if (bUseFlowMap)
+    {
+        float i = float(ThreadId.x);
+        float j = float(ThreadId.y);
+        float4 vel = FlowMap[ThreadId.xy]; // takes the R and G values
+        //vel = float4(100.0f,0.0f,0.0f,0.0f);
+        vel = float4((vel.r - 0.5f)*2.0f, (vel.g - 0.5f) * 2.0f, 0.0f,0.0f);
+        // TODO: Need to include dx,dy and Lx,Ly in calculation
+        float x = i - vel.r * CSVariables.deltaTime*50;
+        float y = j - vel.g * CSVariables.deltaTime*50;
 
-    h0_phi0_RW[idx] = SrcTexture[ThreadId.xy];
+        if (x < 0) x = 0.5; if (x >= width) x = width - 0.5;
+        if (y < 0) y = 0.5; if (y >= height) y = height - 0.5;
+
+        float u = x/width;
+        float v = y/height;
+
+         value = SrcTexture.SampleLevel(SrcSampler, float2(u,v),0);
+         //value = vel;
+    }
+    else
+    {
+        value =  SrcTexture[ThreadId.xy];
+    }
+    //h0_phi0_RW[idx] = SrcTexture[ThreadId.xy];
+    h0_phi0_RW[idx] = value;
+
 }
 #endif //APPLY_HEIGHT

@@ -15,6 +15,8 @@ FComputeTestExecute::FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLe
 	bIsComputeShaderExecuting = false;
 	bMustRegenerateSRV = false;
 	bMustRegenerateObsSRV = false;
+	bMustRegenerateFlowSRV = false;
+	bUseFlowMap = true;
 	bUseObsMap = true;
 
 	InputTexture = NULL;
@@ -22,6 +24,9 @@ FComputeTestExecute::FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLe
 
 	ObsTexture = NULL;
 	ObsTextureSRV = NULL;
+
+	FlowTexture = NULL;
+	FlowTextureSRV = NULL;
 
 	FRHIResourceCreateInfo createInfo;
 	OutTexture = RHICreateTexture2D(sizeX, sizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createInfo);
@@ -154,9 +159,24 @@ void FComputeTestExecute::ClearInternalData()
 		ObsTexture.SafeRelease();
 		ObsTexture = NULL;
 	}
+
+	if (FlowTextureSRV != NULL)
+	{
+		FlowTextureSRV.SafeRelease();
+		FlowTextureSRV = NULL;
+	}
+
+	if (FlowTexture != NULL)
+	{
+		FlowTexture.SafeRelease();
+		FlowTexture = NULL;
+	}
 }
 
-void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRenderTarget, FTexture2DRHIRef inputTexture, FTexture2DRHIRef _obsTexture, FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget)
+void FComputeTestExecute::ExecuteComputeShader(
+	UTextureRenderTarget2D* inputRenderTarget, FTexture2DRHIRef inputTexture, 
+	FTexture2DRHIRef _obsTexture, FTexture2DRHIRef _flowMap, 
+	FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget)
 {
 	check(IsInGameThread());
 
@@ -169,17 +189,11 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 		return;
 	bIsComputeShaderExecuting = true;
 
-	if (_obsTexture != NULL)
-	{
-		bUseObsMap = true;
-	}
-	else
-	{
-		bUseObsMap = false;
-	}
-
+	bUseObsMap = (_obsTexture != NULL) ? true : false;
+	bUseFlowMap = (_flowMap != NULL) ? true : false;
+	
 	inColor = FLinearColor(DisplayColor.R / 255.0, DisplayColor.G / 255.0, DisplayColor.B / 255.0, DisplayColor.A / 255.0);
-	UE_LOG(InternalShaderLog, Warning, TEXT("Shader Variables Initialized"));
+	//UE_LOG(InternalShaderLog, Warning, TEXT("bUseFlowMap: %d"), bUseFlowMap);
 
 	m_VariableParameters.mag = _mag;
 	m_VariableParameters.deltaTime = _delTime;
@@ -191,14 +205,16 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 		bool bUseObsMap;
 		FTexture2DRHIRef obsTexture;
 	};
+	//TSharedPtr<RenderTargetInput, ESPMode::ThreadSafe> rtInput = MakeShared<RenderTargetInput, ESPMode::ThreadSafe>();
 	RenderTargetInput* rtInput = new RenderTargetInput();
 	rtInput->inputRT = inputRenderTarget;
 	rtInput->bUseRenderTarget = bUseRenderTarget;
 	rtInput->inTexture = inputTexture;
 	rtInput->obsTexture = _obsTexture;
 	rtInput->bUseObsMap = bUseObsMap;
+	//TSharedPtr<FComputeTestExecute, ESPMode::ThreadSafe> MyShader = this;
 	FComputeTestExecute* MyShader = this;
-
+	
 	bool SuccessInput = true;
 
 	ENQUEUE_RENDER_COMMAND(ComputeShaderRun)(
@@ -268,19 +284,36 @@ void FComputeTestExecute::ExecuteComputeShader(UTextureRenderTarget2D* inputRend
 		}
 	);
 
+	struct AdvectFields {
+		FTexture2DRHIRef _flowMap;
+		bool bUseFlowMap;
+	};
+	//TSharedPtr<AdvectFields, ESPMode::ThreadSafe> advectVars = MakeShared<AdvectFields, ESPMode::ThreadSafe>();
+	AdvectFields* advectVars = new AdvectFields();
+	advectVars->_flowMap = _flowMap;
+	advectVars->bUseFlowMap = bUseFlowMap;
+
 	ENQUEUE_RENDER_COMMAND(ApplyField)(
-		[MyShader, &SuccessInput](FRHICommandListImmediate& RHICmdList)
+		[MyShader, advectVars, &SuccessInput](FRHICommandListImmediate& RHICmdList)
 		{
-			
+			if (advectVars->bUseFlowMap)
+			{
+				if (MyShader->FlowTexture != advectVars->_flowMap)
+				{
+					MyShader->bMustRegenerateFlowSRV = true;
+				}
+				MyShader->FlowTexture = advectVars->_flowMap;
+			}
 			if (SuccessInput)
 			{
 				SuccessInput = MyShader->ExecuteApplyFields(RHICmdList);
 			}
 		}
 	);
-	UE_LOG(InternalShaderLog, Warning, TEXT("FFT Computed"));
+	
+//	UE_LOG(InternalShaderLog, Warning, TEXT("Shader Computed"));
+	
 	bIsComputeShaderExecuting = false;
-
 }
 
 bool FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList)
@@ -324,7 +357,7 @@ bool FComputeTestExecute::ExecuteComputeShaderInternal(FRHICommandListImmediate&
 	//RHICmdList.DispatchComputeShader(InputTexture->GetSizeX()/8, InputTexture->GetSizeY()/8,1);
 	DispatchComputeShader(RHICmdList, *ComputeShader, FMath::CeilToInt(InputTexture->GetSizeX() / NUM_THREADS_PER_GROUP), FMath::CeilToInt(InputTexture->GetSizeY() / NUM_THREADS_PER_GROUP), 1);
 	ComputeShader->UnbindBuffers(RHICmdList);
-	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, OutTextureUAV);
+	//RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, OutTextureUAV);
 
 	
 	return true;
@@ -350,7 +383,7 @@ bool FComputeTestExecute::ExecuteEWave(FRHICommandListImmediate& RHICmdList)
 	//UE_LOG(LogTemp, Warning, TEXT("OutTextureDims: %d, %d"), FMath::CeilToInt(512 / NUM_THREADS_PER_GROUP), FMath::CeilToInt(512 / NUM_THREADS_PER_GROUP));
 	DispatchComputeShader(RHICmdList, *ComputeShader, FMath::CeilToInt(OutTexture->GetSizeX() / NUM_THREADS_PER_GROUP), FMath::CeilToInt(OutTexture->GetSizeY() / NUM_THREADS_PER_GROUP), 1);
 	ComputeShader->UnbindBuffers(RHICmdList);
-	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, WaveTextureUAV);
+	//RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, WaveTextureUAV);
 
 	return true;
 }
@@ -378,7 +411,7 @@ bool FComputeTestExecute::ExecuteFFT(FRHICommandListImmediate& RHICmdList, bool 
 		SuccessValue = MyGPUFFT::FFTImage2D(FFTContext, FrequencySize, bIsHorizontal, bIsForward, SrcRect, WaveTextureSRV, OutTextureUAV, TmpTextureUAV, TmpTextureSRV);
 
 	}
-	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, OutTextureUAV);
+	//RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, OutTextureUAV);
 	return SuccessValue;
 }
 
@@ -391,15 +424,28 @@ bool FComputeTestExecute::ExecuteApplyFields(FRHICommandListImmediate& RHICmdLis
 		return false;
 	}
 
+	if (bMustRegenerateFlowSRV)
+	{
+		if (NULL != FlowTextureSRV)
+		{
+			FlowTextureSRV.SafeRelease();
+			FlowTextureSRV = NULL;
+		}
+
+		FlowTextureSRV = RHICreateShaderResourceView(FlowTexture, 0);
+	}
+
+
 	TShaderMapRef<FApplyFieldsCS> ComputeShader(GetGlobalShaderMap(FeatureLevel));
 	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
 
-	ComputeShader->SetParameters(RHICmdList, OutTextureSRV);
+	ComputeShader->SetParameters(RHICmdList, OutTextureSRV, FlowTextureSRV, bUseFlowMap);
 	ComputeShader->SetOutput(RHICmdList, h0_phi0_UAV);
+	ComputeShader->SetUniformBuffers(RHICmdList, m_VariableParameters);
 
 	DispatchComputeShader(RHICmdList, *ComputeShader, FMath::CeilToInt(OutTexture->GetSizeX() / NUM_THREADS_PER_GROUP), FMath::CeilToInt(OutTexture->GetSizeY() / NUM_THREADS_PER_GROUP), 1);
 	ComputeShader->UnbindBuffers(RHICmdList);
-	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, h0_phi0_UAV);
+	//RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, h0_phi0_UAV);
 
 	return true;
 }

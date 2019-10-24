@@ -225,7 +225,7 @@ namespace MyGPUFFT
 		const FIntPoint DstExtent = FFTDesc.TransformExtent();
 
 		//ensureMsgf(0, TEXT("FFT: Complex % s of size %d"), *TransformName, TransformLength);
-		UE_LOG(LogTemp, Warning, TEXT("FFT: Complex % s of size %d"), *TransformName, TransformLength);
+		//UE_LOG(LogTemp, Warning, TEXT("FFT: Complex % s of size %d"), *TransformName, TransformLength);
 		//SCOPED_DRAW_EVENT(RHICmdList, ComplexFFTImage, TEXT("FFT: Complex % s of size %d"), *TransformName, TransformLength);
 		FGSComplexTransformBaseCS* ComputeShader = GetComplexFFTCS(ShaderMap, TransformLength);
 		
