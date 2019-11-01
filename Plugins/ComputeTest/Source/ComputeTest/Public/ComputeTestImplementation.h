@@ -11,13 +11,37 @@ public:
 	void ExecuteComputeShader(
 		UTextureRenderTarget2D* InRenderTarget, FTexture2DRHIRef _inputTexture, 
 		FTexture2DRHIRef _obsTexture, FTexture2DRHIRef _flowMap,
-		FColor &DisplayColor, float _mag, float _delTime, bool bUseRenderTarget);
+		FColor &DisplayColor, float _mag, float _delTime, float _choppyScale, float _velScale, bool bUseRenderTarget);
 
-	bool ExecuteComputeShaderInternal(FRHICommandListImmediate& RHICmdList);
-	bool ExecuteEWave(FRHICommandListImmediate& RHICmdList);
-	bool ExecuteFFT(FRHICommandListImmediate& RHICmdList, bool bIsForward);
-	bool ExecuteApplyFields(FRHICommandListImmediate& RHICmdList);
+	bool ExecuteComputeShaderInternal(
+		FRHICommandListImmediate& RHICmdList, 
+		const FShaderResourceViewRHIRef& _SrcTexSRV, const FShaderResourceViewRHIRef& _ObsTexSRV, 
+		FUnorderedAccessViewRHIRef& DstTexUAV, FUnorderedAccessViewRHIRef& StructBufferUAV);
+	
+	bool ExecuteEWave(
+		FRHICommandListImmediate& RHICmdList,
+		const FShaderResourceViewRHIParamRef& SrcSRV,
+		FUnorderedAccessViewRHIRef& DstUAV);
+	bool ExecuteFFT(
+		FRHICommandListImmediate& RHICmdList, 
+		const FShaderResourceViewRHIParamRef& SrcSRV,
+		FUnorderedAccessViewRHIRef& DstUAV, bool bIsForward);
 
+	bool ExecuteAdvectFields(
+		FRHICommandListImmediate& RHICmdList, float velScale,
+		const FShaderResourceViewRHIRef& _SrcTexSRV, const FShaderResourceViewRHIRef& _velTexSRV,
+		FUnorderedAccessViewRHIRef& DstTexUAV
+		);
+	bool ExecuteApplyFields(
+		FRHICommandListImmediate& RHICmdList,
+		const FShaderResourceViewRHIRef& _SrcTexSRV, const FShaderResourceViewRHIRef& gradTexSRV,
+		const FShaderResourceViewRHIRef& obsTexSRV,
+		FUnorderedAccessViewRHIRef& StructBufferUAV, FUnorderedAccessViewRHIRef& _DstTexUAV
+	);
+	bool ExecuteNonLinearAndGrad(
+		FRHICommandListImmediate& RHICmdList, 
+		const FShaderResourceViewRHIRef& SrcSRV, 
+		FUnorderedAccessViewRHIRef& gradUAV, FUnorderedAccessViewRHIRef& dstUAV);
 	FTexture2DRHIRef GetTexture() { return OutTexture; }
 
 protected:
@@ -33,6 +57,8 @@ private:
 	bool bMustRegenerateFlowSRV;
 	bool bUseObsMap;
 	bool bUseFlowMap;
+	
+	
 
 	FIntPoint FrequencySize;
 
@@ -53,18 +79,26 @@ private:
 	FTexture2DRHIRef FlowTexture;
 	FShaderResourceViewRHIRef FlowTextureSRV;
 
-	FTexture2DRHIRef TmpTexture;
-	FUnorderedAccessViewRHIRef TmpTextureUAV;
-	FShaderResourceViewRHIRef TmpTextureSRV;
+	FTexture2DRHIRef TmpFFTTexture;
+	FUnorderedAccessViewRHIRef TmpFFTTextureUAV;
+	FShaderResourceViewRHIRef TmpFFTTextureSRV;
+
+	FTexture2DRHIRef TransitionTexture;
+	FUnorderedAccessViewRHIRef TransitionTextureUAV;
+	FShaderResourceViewRHIRef TransitionTextureSRV;
 
 	FTexture2DRHIRef WaveTexture;
 	FUnorderedAccessViewRHIRef WaveTextureUAV;
 	FShaderResourceViewRHIRef WaveTextureSRV;
+
+	FTexture2DRHIRef DxDyTexture;
+	FUnorderedAccessViewRHIRef DxDyTextureUAV;
+	FShaderResourceViewRHIRef DxDyTextureSRV;
 	
 	FStructuredBufferRHIRef h0_phi0_SB_RW;
 	FUnorderedAccessViewRHIRef h0_phi0_UAV;
 	FShaderResourceViewRHIRef h0_phi0_SRV;
-	
+
 	FComputeShaderVariableParameters m_VariableParameters;
 	
 };

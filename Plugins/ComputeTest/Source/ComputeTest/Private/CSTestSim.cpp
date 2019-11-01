@@ -63,7 +63,7 @@ void ACSTestSim::BeginDestroy()
 }
 
 void ACSTestSim::LoadHeightMapSource(
-	float _magnitude, float _delTime, UTexture2D* SourceMap, UTexture2D* ObsMap, 
+	float _magnitude, float _delTime, float _choppyScale, float flowScale, UTexture2D* SourceMap, UTexture2D* ObsMap, 
 	UTexture2D* FlowMap, FColor DisplayColor, UTextureRenderTarget2D* InRenderTarget, 
 	bool bUseRenderTarget)
 {
@@ -162,7 +162,7 @@ void ACSTestSim::LoadHeightMapSource(
 		//FTexture2DResource* uTex2DRes = static_cast<FTexture2DResource*>(SourceMap->Resource);
 		
 		testComputeShader->ExecuteComputeShader(
-			InRenderTarget,InputTexture, ObsTexture, FlowTexture, DisplayColor, _magnitude, _delTime, bUseRenderTarget);
+			InRenderTarget,InputTexture, ObsTexture, FlowTexture, DisplayColor, _magnitude, _delTime, _choppyScale, flowScale, bUseRenderTarget);
 		
 		//FlushRenderingCommands();
 		UE_LOG(ComputeLog, Warning, TEXT("Compute Shader Executed."));

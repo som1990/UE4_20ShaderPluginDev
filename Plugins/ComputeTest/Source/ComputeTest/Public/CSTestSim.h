@@ -21,7 +21,7 @@ public:
 	ACSTestSim();
 	UFUNCTION(BlueprintCallable, Category = "SGPlugin|LoadSource")
 		void LoadHeightMapSource(
-			float _magnitude, float _delTime, UTexture2D* SourceMap, 
+			float _magnitude, float _delTime, float _choppyScale, float flowScale, UTexture2D* SourceMap, 
 			UTexture2D* ObsMap, UTexture2D* FlowMap, FColor DisplayColor, 
 			UTextureRenderTarget2D* InRenderTarget, bool buseRenderTarget);
 
