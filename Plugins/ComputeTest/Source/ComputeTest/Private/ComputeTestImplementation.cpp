@@ -339,6 +339,7 @@ void FComputeTestExecute::ExecuteComputeShader(
 
 			if (MyShader->bMustRegenerateObsSRV)
 			{
+				MyShader->bMustRegenerateObsSRV = false;
 				if (NULL != MyShader->ObsTextureSRV)
 				{
 					MyShader->ObsTextureSRV.SafeRelease();
@@ -433,6 +434,7 @@ void FComputeTestExecute::ExecuteComputeShader(
 
 			if (MyShader->bMustRegenerateFlowSRV)
 			{
+				MyShader->bMustRegenerateFlowSRV = false;
 				if (NULL != MyShader->FlowTextureSRV)
 				{
 					MyShader->FlowTextureSRV.SafeRelease();
@@ -512,9 +514,29 @@ void FComputeTestExecute::ExecuteComputeShader(
 	);
 	
 	ENQUEUE_RENDER_COMMAND(ApplyFields)(
-		[MyShader, &SuccessInput](FRHICommandListImmediate& RHICmdList)
+		[MyShader, rtInput, &SuccessInput](FRHICommandListImmediate& RHICmdList)
 		{
 			SCOPED_GPU_STAT(RHICmdList, SIM_Total);
+			if (rtInput->bUseObsMap)
+			{
+				if (MyShader->ObsTexture != rtInput->obsTexture)
+				{
+					MyShader->bMustRegenerateObsSRV = true;
+				}
+				MyShader->ObsTexture = rtInput->obsTexture;
+			}
+
+			if (MyShader->bMustRegenerateObsSRV)
+			{
+				MyShader->bMustRegenerateObsSRV = false;
+				if (NULL != MyShader->ObsTextureSRV)
+				{
+					MyShader->ObsTextureSRV.SafeRelease();
+					MyShader->ObsTextureSRV = NULL;
+				}
+
+				MyShader->ObsTextureSRV = RHICreateShaderResourceView(MyShader->ObsTexture, 0);
+			}
 			if (SuccessInput)
 			{
 				SuccessInput = MyShader->ExecuteApplyFields(
@@ -669,6 +691,7 @@ bool FComputeTestExecute::ExecuteApplyFields(
 	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
 	ComputeShader->SetParameters(RHICmdList, _SrcTexSRV, gradTexSRV, obsTexSRV, bUseObsMap);
 	ComputeShader->SetOutput(RHICmdList, StructBufferUAV, _DstTexUAV);
+	ComputeShader->SetUniformBuffers(RHICmdList, m_VariableParameters);
 
 	DispatchComputeShader(
 		RHICmdList, *ComputeShader, 

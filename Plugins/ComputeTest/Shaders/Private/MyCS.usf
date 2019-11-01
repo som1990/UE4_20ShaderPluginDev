@@ -318,7 +318,7 @@ void ApplyFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
 
    // int signCorrection = ((ThreadId.x + ThreadId.y) & 1) ? -1 : 1;
     float signCorrection = 1.0f;
-    value = float4(obs_dx_dy.r * CSVariables.choppyScale, obs_dx_dy.b * CSVariables.choppyScale, obstructedSrc.r, 1.0f) * bound;
+    value = float4(obs_dx_dy.r, obs_dx_dy.b, obstructedSrc.r, 1.0f) * bound;
     DstTexture[ThreadId.xy] = value;
     h0_phi0_RW[idx] = SrcTexture[ThreadId.xy] * bound;
 }
