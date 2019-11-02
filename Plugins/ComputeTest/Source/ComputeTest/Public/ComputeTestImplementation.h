@@ -1,5 +1,6 @@
 #pragma once
 #include "Engine.h"
+#include "EWaveParm.h"
 #include "CSShaders.h"
 
 class COMPUTETEST_API FComputeTestExecute
@@ -11,7 +12,7 @@ public:
 	void ExecuteComputeShader(
 		UTextureRenderTarget2D* InRenderTarget, FTexture2DRHIRef _inputTexture, 
 		FTexture2DRHIRef _obsTexture, FTexture2DRHIRef _flowMap,
-		FColor &DisplayColor, float _mag, float _delTime, float _choppyScale, float _velScale, bool bUseRenderTarget);
+		FColor &DisplayColor, const FEWaveData& eWaveData);
 
 	bool ExecuteComputeShaderInternal(
 		FRHICommandListImmediate& RHICmdList, 

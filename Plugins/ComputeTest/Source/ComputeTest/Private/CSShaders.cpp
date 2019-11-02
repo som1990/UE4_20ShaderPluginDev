@@ -14,4 +14,5 @@ IMPLEMENT_SHADER_TYPE(, FApplyFieldsCS, TEXT("/Plugin/ComputeTest/Private/MyCS.u
 
 IMPLEMENT_SHADER_TYPE(, FMyQuadVS, TEXT("/Plugin/ComputeTest/Private/MyVS_PS.usf"), TEXT("MainVS"), SF_Vertex);
 IMPLEMENT_SHADER_TYPE(, FMyQuadPS, TEXT("/Plugin/ComputeTest/Private/MyVS_PS.usf"), TEXT("MainPS"), SF_Pixel);
+IMPLEMENT_SHADER_TYPE(, FMyGenGradFoldingPS, TEXT("/Plugin/ComputeTest/Private/MyVS_PS.usf"), TEXT("GenGradFoldingPS"), SF_Pixel);
 

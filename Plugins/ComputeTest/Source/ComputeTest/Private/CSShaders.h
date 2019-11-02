@@ -10,7 +10,6 @@
 BEGIN_UNIFORM_BUFFER_STRUCT(FComputeShaderVariableParameters, )
 UNIFORM_MEMBER(float, mag)
 UNIFORM_MEMBER(float, deltaTime)
-UNIFORM_MEMBER(float, choppyScale)
 END_UNIFORM_BUFFER_STRUCT(FComputeShaderVariableParameters)
 
 typedef TUniformBufferRef<FComputeShaderVariableParameters> FComputeShaderVariableParameterRef;
@@ -622,7 +621,7 @@ public:
 
 		return bShaderHasOutdatedParams;
 	}
-
+	/*
 	void SetUniformBuffers(FRHICommandList& RHICmdList, FComputeShaderVariableParameters& VariableParameters)
 	{
 		FComputeShaderVariableParameterRef VariableParametersBuffer;
@@ -634,7 +633,7 @@ public:
 			GetUniformBufferParameter<FComputeShaderVariableParameters>(),
 			VariableParametersBuffer);
 	}
-
+	*/
 	void UnbindBuffers(FRHICommandList& RHICmdList)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
@@ -793,7 +792,84 @@ public:
 		return true;
 	}
 
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.CompilerFlags.Add(CFLAG_StandardOptimization);
+		OutEnvironment.SetDefine(TEXT("DISP_MAP"), 1);
+		
+	}
+
 private:
 	FShaderResourceParameter TextureParameter;
 	FShaderResourceParameter TexMapSampler;
+};
+
+
+class FMyGenGradFoldingPS : public FGlobalShader
+{
+	DECLARE_SHADER_TYPE(FMyGenGradFoldingPS, Global);
+
+public:
+	FMyGenGradFoldingPS() {}
+	FMyGenGradFoldingPS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		:FGlobalShader(Initializer)
+	{
+		SrcTexParm.Bind(Initializer.ParameterMap, TEXT("SrcTexParm"));
+		SrcTexSampler.Bind(Initializer.ParameterMap, TEXT("SrcTexSampler"));
+	}
+
+	void SetParameters(FRHICommandList& RHICmdList,
+		const FTextureRHIParamRef& TextureRHI)
+	{
+		FPixelShaderRHIParamRef PixelShaderRHI = GetPixelShader();
+
+		FSamplerStateRHIParamRef SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+		SetTextureParameter(RHICmdList, PixelShaderRHI, SrcTexParm, SrcTexSampler, SamplerStateLinear, TextureRHI);
+
+	}
+
+	void UnbindBuffers(FRHICommandList& RHICmdList)
+	{
+		FPixelShaderRHIParamRef PixelShaderRHI = GetPixelShader();
+		
+		if (SrcTexParm.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(
+				PixelShaderRHI, SrcTexParm.IsBound(), FShaderResourceViewRHIRef());
+		}
+
+	}
+
+	virtual bool Serialize(FArchive &Ar) override
+	{
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << SrcTexParm << SrcTexSampler;
+		return bShaderHasOutdatedParameters;
+	}
+
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
+
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		//OutEnvironment.CompilerFlags.Add(CFLAG_StandardOptimization);
+		OutEnvironment.SetDefine(TEXT("NORMAL_MAP"), 1);
+
+	}
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters &Parameters)
+	{
+		return true;
+	}
+
+	
+
+private:
+	FShaderResourceParameter SrcTexParm;
+	FShaderResourceParameter SrcTexSampler;
+
 };

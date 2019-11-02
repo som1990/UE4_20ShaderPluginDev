@@ -6,6 +6,7 @@
 #include "Engine.h"
 #include "GameFramework/Actor.h"
 #include "ComputeTest.h"
+#include "EWaveParm.h"
 #include "ComputeTestImplementation.h"
 #include "VS_PSImplementation.h"
 #include "CSTestSim.generated.h"
@@ -21,9 +22,10 @@ public:
 	ACSTestSim();
 	UFUNCTION(BlueprintCallable, Category = "SGPlugin|LoadSource")
 		void LoadHeightMapSource(
-			float _magnitude, float _delTime, float _choppyScale, float flowScale, UTexture2D* SourceMap, 
+			float _mag, float _delTime,
+			UTexture2D* SourceMap, 
 			UTexture2D* ObsMap, UTexture2D* FlowMap, FColor DisplayColor, 
-			UTextureRenderTarget2D* InRenderTarget, bool buseRenderTarget);
+			UTextureRenderTarget2D* InRenderTarget);
 
 	UFUNCTION(BlueprintCallable, Category = "SGPlugin|PreviewTexture")
 		void GeneratePreviewTexture(UTexture2D* &OutTexture);
@@ -32,6 +34,12 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	UTextureRenderTarget2D* RenderTarget2Display;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UTextureRenderTarget2D* NormalMapRenderTarget;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Config)
+	FEWaveData EWaveConfig;
 
 protected:
 	// Called when the game starts or when spawned

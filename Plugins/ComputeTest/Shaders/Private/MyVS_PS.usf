@@ -16,6 +16,7 @@ void MainVS(
     OutUV.y = InUV.y;
 }
 
+#ifdef DISP_MAP
 Texture2D TextureParameter;
 SamplerState TexMapSampler;
 
@@ -27,3 +28,21 @@ void MainPS(
     float4 packedValue = TextureParameter.Sample(TexMapSampler, InUV);
     OutColor = packedValue;
 }
+
+#endif //DISP_MAP
+
+
+#ifdef NORMAL_MAP
+Texture2D<float4> SrcTexture;
+SamplerState TexMapSampler;
+
+void GenGradFoldingPS(
+    in float2 InUV: TEXCOORD0,
+    out float4 OutColor : SV_Target0
+    )
+{
+
+    OutColor = float4(1.0f,0.0f,0.f,1.0f);
+}
+
+#endif //NORMAL_MAP

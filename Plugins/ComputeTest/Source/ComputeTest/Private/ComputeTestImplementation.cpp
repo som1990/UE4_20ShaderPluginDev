@@ -246,7 +246,7 @@ DECLARE_GPU_STAT_NAMED(SIM_Total, TEXT("SIM_Total"));
 void FComputeTestExecute::ExecuteComputeShader(
 	UTextureRenderTarget2D* inputRenderTarget, FTexture2DRHIRef inputTexture, 
 	FTexture2DRHIRef _obsTexture, FTexture2DRHIRef _flowMap, 
-	FColor &DisplayColor, float _mag, float _delTime, float _choppyScale, float _velScale, bool bUseRenderTarget)
+	FColor &DisplayColor, const FEWaveData& eWaveData)
 {
 	SCOPE_CYCLE_COUNTER(STAT_TotSimTime);
 	check(IsInGameThread());
@@ -266,9 +266,9 @@ void FComputeTestExecute::ExecuteComputeShader(
 	inColor = FLinearColor(DisplayColor.R / 255.0, DisplayColor.G / 255.0, DisplayColor.B / 255.0, DisplayColor.A / 255.0);
 	//UE_LOG(InternalShaderLog, Warning, TEXT("bUseFlowMap: %d"), bUseFlowMap);
 
-	m_VariableParameters.mag = _mag;
-	m_VariableParameters.deltaTime = _delTime;
-	m_VariableParameters.choppyScale = _choppyScale;
+	m_VariableParameters.mag = eWaveData.magnitude;
+	m_VariableParameters.deltaTime = eWaveData.delTime;
+	//m_VariableParameters.choppyScale = _choppyScale;
 	
 
 	struct RenderTargetInput {
@@ -281,7 +281,7 @@ void FComputeTestExecute::ExecuteComputeShader(
 	//TSharedPtr<RenderTargetInput, ESPMode::ThreadSafe> rtInput = MakeShared<RenderTargetInput, ESPMode::ThreadSafe>();
 	RenderTargetInput* rtInput = new RenderTargetInput();
 	rtInput->inputRT = inputRenderTarget;
-	rtInput->bUseRenderTarget = bUseRenderTarget;
+	rtInput->bUseRenderTarget = eWaveData.bUseRenderTarget;
 	rtInput->inTexture = inputTexture;
 	rtInput->obsTexture = _obsTexture;
 	rtInput->bUseObsMap = bUseObsMap;
@@ -413,7 +413,7 @@ void FComputeTestExecute::ExecuteComputeShader(
 	AdvectFields* advectVars = new AdvectFields();
 	advectVars->_flowMap = _flowMap;
 	advectVars->bUseFlowMap = bUseFlowMap;
-	advectVars->velScale = _velScale;
+	advectVars->velScale = eWaveData.flowScale;
 
 	ENQUEUE_RENDER_COMMAND(AdvectField)(
 		[MyShader, advectVars, &SuccessInput](FRHICommandListImmediate& RHICmdList)
@@ -691,7 +691,7 @@ bool FComputeTestExecute::ExecuteApplyFields(
 	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
 	ComputeShader->SetParameters(RHICmdList, _SrcTexSRV, gradTexSRV, obsTexSRV, bUseObsMap);
 	ComputeShader->SetOutput(RHICmdList, StructBufferUAV, _DstTexUAV);
-	ComputeShader->SetUniformBuffers(RHICmdList, m_VariableParameters);
+	//ComputeShader->SetUniformBuffers(RHICmdList, m_VariableParameters);
 
 	DispatchComputeShader(
 		RHICmdList, *ComputeShader, 

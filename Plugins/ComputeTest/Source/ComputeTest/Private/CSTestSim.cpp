@@ -10,7 +10,8 @@ ACSTestSim::ACSTestSim()
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 	prevU = prevV = 0.f;
-	texSizeX = texSizeY = 0;
+	texSizeX = 0;
+	texSizeY = 0;
 	bIsTextureGeneratingExecuting = false;
 	bIsTextureDimensionsSet = false;
 	InputTexture = NULL;
@@ -23,21 +24,16 @@ ACSTestSim::ACSTestSim()
 void ACSTestSim::BeginPlay()
 {
 	Super::BeginPlay();
-	testComputeShader = new FComputeTestExecute(512, 512, GetWorld()->Scene->GetFeatureLevel());
-	testDisplayShader = new FDisplayShaderExecute(512, 512, GetWorld()->Scene->GetFeatureLevel());
+	texSizeX = FMath::RoundUpToPowerOfTwo(EWaveConfig.TexMapSize.X);
+	texSizeY = FMath::RoundUpToPowerOfTwo(EWaveConfig.TexMapSize.Y);
+	testComputeShader = new FComputeTestExecute(texSizeX, texSizeY, GetWorld()->Scene->GetFeatureLevel());
+	testDisplayShader = new FDisplayShaderExecute(texSizeX, texSizeY, GetWorld()->Scene->GetFeatureLevel());
 }
 
 
 void ACSTestSim::BeginDestroy()
 {
 	Super::BeginDestroy();
-	if (testComputeShader) {
-		delete testComputeShader;
-	}
-	if (testDisplayShader)
-	{
-		delete testDisplayShader;
-	}
 
 	if (InputTexture)
 	{
@@ -59,19 +55,36 @@ void ACSTestSim::BeginDestroy()
 		FlowTexture.SafeRelease();
 		FlowTexture = NULL;
 	}
-
+	
+	if (testComputeShader) {
+		delete testComputeShader;
+	}
+	if (testDisplayShader)
+	{
+		delete testDisplayShader;
+	}
 }
 
 void ACSTestSim::LoadHeightMapSource(
-	float _magnitude, float _delTime, float _choppyScale, float flowScale, UTexture2D* SourceMap, UTexture2D* ObsMap, 
-	UTexture2D* FlowMap, FColor DisplayColor, UTextureRenderTarget2D* InRenderTarget, 
-	bool bUseRenderTarget)
+	float _mag, float _delTime,
+	UTexture2D* SourceMap, UTexture2D* ObsMap, 
+	UTexture2D* FlowMap, FColor DisplayColor, UTextureRenderTarget2D* InRenderTarget)
 {
 	check(IsInGameThread());
+	if (!RenderTarget2Display || !NormalMapRenderTarget)
+	{
+		UE_LOG(ComputeLog, Error, TEXT("RenderTarget2Display and/or NormalMapRenderTarget not provided. Returning"));
+
+		return;
+	}
+
+	EWaveConfig.magnitude = _mag;
+	EWaveConfig.delTime = _delTime;
+
 	bUseObsMap = true;
 	bUseFlowMap = true;
 	int sizeX, sizeY;
-	if (bUseRenderTarget)
+	if (EWaveConfig.bUseRenderTarget)
 	{
 		sizeX = InRenderTarget->SizeX;
 		sizeY = InRenderTarget->SizeY;
@@ -92,12 +105,12 @@ void ACSTestSim::LoadHeightMapSource(
 	{
 		if (ObsMap->GetSizeX() != texSizeX || ObsMap->GetSizeY() != texSizeY)
 		{
-			UE_LOG(ComputeLog, Warning, TEXT("Correct Obstruction Map Dimensions not provided"));
+			//UE_LOG(ComputeLog, Warning, TEXT("Correct Obstruction Map Dimensions not provided"));
 			bUseObsMap = false;
 		}
 	}
 	else {
-		UE_LOG(ComputeLog, Warning, TEXT("Obstruction Map not provided"));
+		//UE_LOG(ComputeLog, Warning, TEXT("Obstruction Map not provided"));
 
 		bUseObsMap = false;
 	}
@@ -106,18 +119,18 @@ void ACSTestSim::LoadHeightMapSource(
 	{
 		if (FlowMap->GetSizeX() != texSizeX || FlowMap->GetSizeY() != texSizeY)
 		{
-			UE_LOG(ComputeLog, Warning, TEXT("Correct Flow Map Dimensions not provided"));
+			//UE_LOG(ComputeLog, Warning, TEXT("Correct Flow Map Dimensions not provided"));
 			bUseFlowMap = false;
 		}
 
 	}
 	else {
-		UE_LOG(ComputeLog, Warning, TEXT("Flow Map not provided"));
+		//UE_LOG(ComputeLog, Warning, TEXT("Flow Map not provided"));
 		bUseFlowMap = false;
 	}
 	if (!bIsTextureDimensionsSet)
 	{
-		UE_LOG(ComputeLog, Warning, TEXT("TextureDimensions are not Set. Returning"));
+		//UE_LOG(ComputeLog, Warning, TEXT("TextureDimensions are not Set. Returning"));
 		return;
 	}
 	//GEngine->AddOnScreenDebugMessage(-1, 0.2, FColor::Yellow, TEXT("Magnitude: ") + FString::SanitizeFloat(_magnitude));
@@ -126,21 +139,21 @@ void ACSTestSim::LoadHeightMapSource(
 	{
 		InputTexture.SafeRelease();
 		InputTexture = NULL;
-		UE_LOG(ComputeLog, Warning, TEXT("InputTexture Reset."));
+		//UE_LOG(ComputeLog, Warning, TEXT("InputTexture Reset."));
 	}
 
 	if (ObsTexture != NULL)
 	{
 		ObsTexture.SafeRelease();
 		ObsTexture = NULL;
-		UE_LOG(ComputeLog, Warning, TEXT("Obstruction Texture Reset."));
+		//UE_LOG(ComputeLog, Warning, TEXT("Obstruction Texture Reset."));
 	}
 	
 	if (FlowTexture != NULL)
 	{
 		FlowTexture.SafeRelease();
 		FlowTexture = NULL;
-		UE_LOG(ComputeLog, Warning, TEXT("Flow Texture Reset."));
+		//UE_LOG(ComputeLog, Warning, TEXT("Flow Texture Reset."));
 
 	}
 
@@ -162,16 +175,14 @@ void ACSTestSim::LoadHeightMapSource(
 		//FTexture2DResource* uTex2DRes = static_cast<FTexture2DResource*>(SourceMap->Resource);
 		
 		testComputeShader->ExecuteComputeShader(
-			InRenderTarget,InputTexture, ObsTexture, FlowTexture, DisplayColor, _magnitude, _delTime, _choppyScale, flowScale, bUseRenderTarget);
+			InRenderTarget,InputTexture, ObsTexture, FlowTexture, DisplayColor, EWaveConfig);
 		
 		//FlushRenderingCommands();
-		UE_LOG(ComputeLog, Warning, TEXT("Compute Shader Executed."));
-		if (RenderTarget2Display)
-		{
+		//UE_LOG(ComputeLog, Warning, TEXT("Compute Shader Executed."));
+		
+		testDisplayShader->ExecuteDisplayShader(RenderTarget2Display, NormalMapRenderTarget, testComputeShader->GetTexture());
+		//UE_LOG(ComputeLog, Warning, TEXT("RenderTarget Generated."));
 			
-			testDisplayShader->ExecuteDisplayShader(RenderTarget2Display, testComputeShader->GetTexture());
-			//UE_LOG(ComputeLog, Warning, TEXT("RenderTarget Generated."));
-		}	
 	}
 }
 
@@ -218,6 +229,7 @@ void ACSTestSim::setOutputDimensions(int32 xSize, int32 ySize)
 	testDisplayShader = new FDisplayShaderExecute(xSize, ySize, GetWorld()->Scene->GetFeatureLevel());
 	texSizeX = xSize;
 	texSizeY = ySize;
+	EWaveConfig.TexMapSize = FVector2D(texSizeX, texSizeY);
 	UE_LOG(ComputeLog, Warning, TEXT("OutTexture Extracted, Dimensions: %d, %d"), xSize, ySize);
 	bIsTextureDimensionsSet = true;
 	

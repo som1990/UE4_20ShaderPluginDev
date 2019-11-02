@@ -5,6 +5,7 @@
 #include "ObjectMacros.h"
 #include "ModuleManager.h"
 
+#include "EWaveParm.h"
 #include "CSTestSim.h"
 #include "CSShaders.h"
 
