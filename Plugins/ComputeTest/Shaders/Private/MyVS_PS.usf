@@ -3,6 +3,8 @@
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/ColorUtils.ush"
 
+#define PI 3.1415926535897932f
+
 //Vertex Shader
 void MainVS( 
 	in float4 InPosition: ATTRIBUTE0,
@@ -12,37 +14,95 @@ void MainVS(
 	)
 {
     OutPos = InPosition;
-    OutUV.x = 1.0f - InUV.x;
-    OutUV.y = InUV.y;
+    //OutUV.x = 1.0f - InUV.x;
+    //OutUV.y = InUV.y;
+
+    OutUV.x = 0.5f + InPosition.x * 0.5f;
+	OutUV.y = 0.5f - InPosition.y * 0.5f;
 }
 
 #ifdef DISP_MAP
 Texture2D TextureParameter;
 SamplerState TexMapSampler;
 
+
+float choppyness;
+float L_x;
+float L_y;
+
 void MainPS( 
 	in float2 InUV : TEXCOORD0, 
 	out float4 OutColor : SV_Target0 
 	)
 {
-    float4 packedValue = TextureParameter.Sample(TexMapSampler, InUV);
-    OutColor = packedValue;
+    float choppy = DispPerFrame.choppyness;
+
+    uint width, height;
+    TextureParameter.GetDimensions(width,height);
+    uint index_x = (uint)(InUV.x * (float)width);
+	uint index_y = (uint)(InUV.y * (float)height);
+
+    int signCorrection = ((index_x + index_y) & 1) ? -1 : 1;
+    float3 packedValue = TextureParameter.Sample(TexMapSampler, InUV).xyz;
+    OutColor = float4(-packedValue.x*choppyness*2.0*PI/L_x, -packedValue.y*choppyness*2.0*PI/L_y, packedValue.z, 1.0);
 }
 
 #endif //DISP_MAP
 
 
 #ifdef NORMAL_MAP
-Texture2D<float4> SrcTexture;
-SamplerState TexMapSampler;
+Texture2D<float4> SrcTexParm;
+SamplerState SrcTexSampler;
+
+
+float choppyness;
+float L_x;
+float L_y;
 
 void GenGradFoldingPS(
     in float2 InUV: TEXCOORD0,
     out float4 OutColor : SV_Target0
     )
 {
+    uint width, height;
+    SrcTexParm.GetDimensions(width,height);
+    
+    
+    float2 one_texel = float2(1.0f/ (float)width, 1.0f/ (float)height);
 
-    OutColor = float4(1.0f,0.0f,0.f,1.0f);
+    float2 tc_left = float2(InUV.x - one_texel.x, InUV.y);
+    float2 tc_right = float2(InUV.x + one_texel.x, InUV.y);
+    float2 tc_back = float2(InUV.x, InUV.y - one_texel.y);
+    float2 tc_front = float2(InUV.x, InUV.y + one_texel.y);
+    
+    if (tc_left.x < 0.0f) tc_left.x = 0.0f;
+    if (tc_right.x > 1.0f) tc_right.x = 1.0f;
+    if (tc_back.y < 0.0f ) tc_back.y = 0.0f;
+    if (tc_front.y > 1.0f) tc_front.y = 1.0f;
+
+    float3 displace_left = SrcTexParm.Sample(SrcTexSampler, tc_left).rgb;
+    float3 displace_right = SrcTexParm.Sample(SrcTexSampler, tc_right).rgb;
+    float3 displace_back = SrcTexParm.Sample(SrcTexSampler, tc_back).rgb;
+    float3 displace_front = SrcTexParm.Sample(SrcTexSampler, tc_front).rgb;
+
+    float3 displaceCenter = SrcTexParm.Sample(SrcTexSampler,InUV.xy).rgb;
+    //TODO: Multiply GridLength.
+    float2 gradient = {-(displace_right.b - displace_left.b), -(displace_front.b - displace_back.b)};
+    //float2 gradient = {-(displaceCenter.x), -(displaceCenter.y)};
+
+    float m_x = L_x/((float)width);
+    float m_y = L_y/((float)height);
+
+    //Variable parameters providing heavy memory leaks. Ask Epic why?
+    //float2 Dx = (displace_right.xy - displace_left.xy) * choppy * DispPerFrame.dx;
+    float2 Dx = (displace_right.xy - displace_left.xy) * choppyness * L_x;
+    //float2 Dy = (displace_front.xy - displace_back.xy) * choppy * DispPerFrame.dy;
+    float2 Dy = (displace_front.xy - displace_back.xy) * choppyness * L_x;
+    float J = (1.0f + Dx.x)* (1.0f + Dy.y) - Dx.y * Dy.x;
+
+    float fold = max(1.0f - J, 0);
+
+    OutColor = float4(gradient,0.f,fold);
 }
 
 #endif //NORMAL_MAP

@@ -1,7 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "CSTestSim.h"
-
+#include "Public/Stats/Stats2.h"
+#include "Public/SceneUtils.h"
 DECLARE_LOG_CATEGORY_EXTERN(ComputeLog, Log, All);
 DEFINE_LOG_CATEGORY(ComputeLog);
 // Sets default values
@@ -26,6 +27,9 @@ void ACSTestSim::BeginPlay()
 	Super::BeginPlay();
 	texSizeX = FMath::RoundUpToPowerOfTwo(EWaveConfig.TexMapSize.X);
 	texSizeY = FMath::RoundUpToPowerOfTwo(EWaveConfig.TexMapSize.Y);
+	//texSizeX = FMath::RoundUpToPowerOfTwo(512);
+	//texSizeY = FMath::RoundUpToPowerOfTwo(512);
+
 	testComputeShader = new FComputeTestExecute(texSizeX, texSizeY, GetWorld()->Scene->GetFeatureLevel());
 	testDisplayShader = new FDisplayShaderExecute(texSizeX, texSizeY, GetWorld()->Scene->GetFeatureLevel());
 }
@@ -65,11 +69,16 @@ void ACSTestSim::BeginDestroy()
 	}
 }
 
+
+//DECLARE_STATS_GROUP(TEXT("SIM"), STATGROUP_SIM, STATCAT_Advanced);
+//DECLARE_CYCLE_STAT(TEXT("Total CalcTime"), STAT_TotSimTime, STATGROUP_SIM);
+
 void ACSTestSim::LoadHeightMapSource(
 	float _mag, float _delTime,
 	UTexture2D* SourceMap, UTexture2D* ObsMap, 
 	UTexture2D* FlowMap, FColor DisplayColor, UTextureRenderTarget2D* InRenderTarget)
 {
+	//SCOPE_CYCLE_COUNTER(STAT_TotSimTime);
 	check(IsInGameThread());
 	if (!RenderTarget2Display || !NormalMapRenderTarget)
 	{
@@ -85,6 +94,7 @@ void ACSTestSim::LoadHeightMapSource(
 	bUseFlowMap = true;
 	int sizeX, sizeY;
 	if (EWaveConfig.bUseRenderTarget)
+	//if(true)
 	{
 		sizeX = InRenderTarget->SizeX;
 		sizeY = InRenderTarget->SizeY;
@@ -167,10 +177,12 @@ void ACSTestSim::LoadHeightMapSource(
 		FlowTexture = static_cast<FTexture2DResource*>(FlowMap->Resource)->GetTexture2DRHI();
 	}
 
-	InputTexture = static_cast<FTexture2DResource*>(SourceMap->Resource)->GetTexture2DRHI();
-	
+	if (SourceMap)
+	{
+		InputTexture = static_cast<FTexture2DResource*>(SourceMap->Resource)->GetTexture2DRHI();
+	}
 	//UE_LOG(ComputeLog, Warning, TEXT("RHITexture2D Extracted, Dimensions: %d, %d"), SourceMap->PlatformData->Mips[0].SizeX, SourceMap->PlatformData->Mips[0].SizeY);
-	if (InputTexture)
+	if (InputTexture || InRenderTarget)
 	{
 		//FTexture2DResource* uTex2DRes = static_cast<FTexture2DResource*>(SourceMap->Resource);
 		
@@ -180,7 +192,7 @@ void ACSTestSim::LoadHeightMapSource(
 		//FlushRenderingCommands();
 		//UE_LOG(ComputeLog, Warning, TEXT("Compute Shader Executed."));
 		
-		testDisplayShader->ExecuteDisplayShader(RenderTarget2Display, NormalMapRenderTarget, testComputeShader->GetTexture());
+		testDisplayShader->ExecuteDisplayShader(RenderTarget2Display, NormalMapRenderTarget, testComputeShader->GetTexture(), EWaveConfig);
 		//UE_LOG(ComputeLog, Warning, TEXT("RenderTarget Generated."));
 			
 	}

@@ -19,6 +19,15 @@ FDisplayShaderExecute::FDisplayShaderExecute(int sizeX, int32 sizeY, ERHIFeature
 	CurNormMapRT = NULL;
 	CurNormalTexture = NULL;
 
+	m_pQuadVB[0].Position = FVector4(-1.0f, 1.0f, 0.0f, 1.0f);
+	m_pQuadVB[1].Position = FVector4(1.0f, 1.0f, 0.0f, 1.0f);
+	m_pQuadVB[2].Position = FVector4(-1.0f, -1.0f, 0.0f, 1.0f);
+	m_pQuadVB[3].Position = FVector4(1.0f, -1.0f, 0.0f, 1.0f);
+	m_pQuadVB[0].UV = FVector2D(0, 0);
+	m_pQuadVB[1].UV = FVector2D(1, 0);
+	m_pQuadVB[2].UV = FVector2D(0, 1);
+	m_pQuadVB[3].UV = FVector2D(1, 1);
+
 }
 
 FDisplayShaderExecute::~FDisplayShaderExecute()
@@ -26,8 +35,12 @@ FDisplayShaderExecute::~FDisplayShaderExecute()
 	bisUnloading = true;
 }
 
+DECLARE_GPU_STAT_NAMED(SIM_Display, TEXT("SIM_RTDisplay"));
+
 void FDisplayShaderExecute::ExecuteDisplayShader(
-	UTextureRenderTarget2D* RenderTarget, UTextureRenderTarget2D* NormMapRT, FTexture2DRHIRef InputTexture)
+	UTextureRenderTarget2D* RenderTarget, UTextureRenderTarget2D* NormMapRT, 
+	FTexture2DRHIRef InputTexture, const FEWaveData &eWaveData)
+	
 {
 	check(IsInGameThread());
 
@@ -48,21 +61,33 @@ void FDisplayShaderExecute::ExecuteDisplayShader(
 	CurNormMapRT = NormMapRT;
 	TextureParameter = InputTexture;
 
+	m_PSVariableParm.choppyness = eWaveData.choppyScale;
+	m_PSVariableParm.dx = eWaveData.SimGridSize.X / (1.0f*eWaveData.TexMapSize.X);
+	m_PSVariableParm.dy = eWaveData.SimGridSize.Y / (1.0f*eWaveData.TexMapSize.Y);
+	
+	m_Lx = eWaveData.SimGridSize.X;
+	m_Ly = eWaveData.SimGridSize.Y;
+
+	//m_PSVariableParm.choppyness = 1.3f;
+	//m_PSVariableParm.dx = 10 / 512.0f;
+	//m_PSVariableParm.dy = 10.0 / 512.0f;
 	FDisplayShaderExecute* MyShader = this;
 	ENQUEUE_RENDER_COMMAND(DisplayShaderRunner)(
 		[MyShader](FRHICommandListImmediate& RHICmdList)
 		{
+			SCOPED_GPU_STAT(RHICmdList, SIM_Display);
 			MyShader->ExecuteDisplayShader_RenderThread(RHICmdList);
 		}
 	);
-
+	
 	ENQUEUE_RENDER_COMMAND(NormalMapGen)(
 		[MyShader](FRHICommandListImmediate& RHICmdList)
 		{
+			SCOPED_GPU_STAT(RHICmdList, SIM_Display);
 			MyShader->ExecuteNormalRT_RenderThread(RHICmdList);
 		}
 	);
-
+	bIsPixelShaderExecuting = false;
 }
 
 void FDisplayShaderExecute::ExecuteDisplayShader_RenderThread(FRHICommandListImmediate &RHICmdList)
@@ -110,9 +135,10 @@ void FDisplayShaderExecute::ExecuteDisplayShader_RenderThread(FRHICommandListImm
 
 	SetGraphicsPipelineState(RHICmdList, PSOInitializer);
 
-	PixelShader->SetParameters(RHICmdList, TextureParameterSRV, TextureParameter);
-	
-	m_pQuadVB[0].Position = FVector4(-1.0f, 1.0f, 0.0f, 1.0f);
+	PixelShader->SetParameters(RHICmdList, TextureParameterSRV, TextureParameter, m_PSVariableParm.choppyness, m_Lx, m_Ly);
+	PixelShader->SetUniformBuffers(RHICmdList, m_PSVariableParm);
+
+	/*m_pQuadVB[0].Position = FVector4(-1.0f, 1.0f, 0.0f, 1.0f);
 	m_pQuadVB[1].Position = FVector4(1.0f, 1.0f, 0.0f, 1.0f);
 	m_pQuadVB[2].Position = FVector4(-1.0f, -1.0f, 0.0f, 1.0f);
 	m_pQuadVB[3].Position = FVector4(1.0f, -1.0f, 0.0f, 1.0f);
@@ -120,7 +146,7 @@ void FDisplayShaderExecute::ExecuteDisplayShader_RenderThread(FRHICommandListImm
 	m_pQuadVB[1].UV = FVector2D(1, 0);
 	m_pQuadVB[2].UV = FVector2D(0, 1);
 	m_pQuadVB[3].UV = FVector2D(1, 1);
-
+	*/
 	DrawPrimitiveUP(RHICmdList, PT_TriangleStrip, 2, m_pQuadVB, sizeof(m_pQuadVB[0]));
 
 	PixelShader->UnbindBuffers(RHICmdList);
@@ -128,8 +154,6 @@ void FDisplayShaderExecute::ExecuteDisplayShader_RenderThread(FRHICommandListImm
 		CurrentRenderTarget->GetRenderTargetResource()->GetRenderTargetTexture(),
 		CurrentRenderTarget->GetRenderTargetResource()->TextureRHI,	FResolveParams()
 	);
-	
-	bIsPixelShaderExecuting = false;
 
 }
 
@@ -162,9 +186,11 @@ void FDisplayShaderExecute::ExecuteNormalRT_RenderThread(FRHICommandListImmediat
 	TShaderMapRef<FMyQuadVS> VertexShader(GetGlobalShaderMap(FeatureLevel));
 	TShaderMapRef<FMyGenGradFoldingPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
 
+	//FEWavePSVariableParameterRef dispParameter = FEWavePSVariableParameterRef::CreateUniformBufferImmediate(m_PSVariableParm, UniformBuffer_SingleFrame);
+
 	CurNormalTexture = CurNormMapRT->GetRenderTargetResource()->GetRenderTargetTexture();
 	SetRenderTarget(RHICmdList, CurNormalTexture, FTexture2DRHIRef());
-
+	
 	FGraphicsPipelineStateInitializer PSOInitializer;
 	RHICmdList.ApplyCachedRenderTargets(PSOInitializer);
 
@@ -179,16 +205,10 @@ void FDisplayShaderExecute::ExecuteNormalRT_RenderThread(FRHICommandListImmediat
 
 	SetGraphicsPipelineState(RHICmdList, PSOInitializer);
 
-	PixelShader->SetParameters(RHICmdList, CurrentRenderTarget->GetRenderTargetResource()->TextureRHI);
+	PixelShader->SetParameters(RHICmdList, CurrentRenderTarget->GetRenderTargetResource()->TextureRHI, m_PSVariableParm.choppyness, m_Lx, m_Ly);
+	//PixelShader->SetUniformBuffers(RHICmdList, dispParameter);
 
-	m_pQuadVB[0].Position = FVector4(-1.0f, 1.0f, 0.0f, 1.0f);
-	m_pQuadVB[1].Position = FVector4(1.0f, 1.0f, 0.0f, 1.0f);
-	m_pQuadVB[2].Position = FVector4(-1.0f, -1.0f, 0.0f, 1.0f);
-	m_pQuadVB[3].Position = FVector4(1.0f, -1.0f, 0.0f, 1.0f);
-	m_pQuadVB[0].UV = FVector2D(0, 0);
-	m_pQuadVB[1].UV = FVector2D(1, 0);
-	m_pQuadVB[2].UV = FVector2D(0, 1);
-	m_pQuadVB[3].UV = FVector2D(1, 1);
+	
 
 	DrawPrimitiveUP(RHICmdList, PT_TriangleStrip, 2, m_pQuadVB, sizeof(m_pQuadVB[0]));
 

@@ -34,7 +34,7 @@ public:
 		FUnorderedAccessViewRHIRef& DstTexUAV
 		);
 	bool ExecuteApplyFields(
-		FRHICommandListImmediate& RHICmdList,
+		FRHICommandListImmediate& RHICmdList, float _velScale,
 		const FShaderResourceViewRHIRef& _SrcTexSRV, const FShaderResourceViewRHIRef& gradTexSRV,
 		const FShaderResourceViewRHIRef& obsTexSRV,
 		FUnorderedAccessViewRHIRef& StructBufferUAV, FUnorderedAccessViewRHIRef& _DstTexUAV
@@ -60,6 +60,9 @@ private:
 	bool bUseFlowMap;
 	
 	
+	float m_Lx, m_Ly;
+	bool bGenGrad;
+	bool bcalcNonLinear; 
 
 	FIntPoint FrequencySize;
 
@@ -88,6 +91,10 @@ private:
 	FUnorderedAccessViewRHIRef TransitionTextureUAV;
 	FShaderResourceViewRHIRef TransitionTextureSRV;
 
+	FTexture2DRHIRef FFTTransitionTexture;
+	FUnorderedAccessViewRHIRef FFTTransitionTextureUAV;
+	FShaderResourceViewRHIRef FFTTransitionTextureSRV;
+
 	FTexture2DRHIRef WaveTexture;
 	FUnorderedAccessViewRHIRef WaveTextureUAV;
 	FShaderResourceViewRHIRef WaveTextureSRV;
@@ -96,6 +103,10 @@ private:
 	FUnorderedAccessViewRHIRef DxDyTextureUAV;
 	FShaderResourceViewRHIRef DxDyTextureSRV;
 	
+	FTexture2DRHIRef DvxDvyTexture;
+	FUnorderedAccessViewRHIRef DvxDvyTextureUAV;
+	FShaderResourceViewRHIRef DvxDvyTextureSRV;
+
 	FStructuredBufferRHIRef h0_phi0_SB_RW;
 	FUnorderedAccessViewRHIRef h0_phi0_UAV;
 	FShaderResourceViewRHIRef h0_phi0_SRV;

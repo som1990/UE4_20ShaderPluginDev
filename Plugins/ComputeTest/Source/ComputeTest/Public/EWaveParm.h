@@ -26,9 +26,15 @@ struct FEWaveData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float flowScale;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) 
 	bool bUseRenderTarget;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (DisplayName = "Generate Gradient"))
+	bool bGenGrad;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (DisplayName = "Calculate Non-Linear"))
+	bool bCalcNonLinear;
+	
 	/*Defaults*/
 	FEWaveData()
 	{
@@ -39,5 +45,7 @@ struct FEWaveData
 		choppyScale = 1.3f;
 		flowScale = 0.0f;
 		bUseRenderTarget = true;
+		bGenGrad = true;
+		bCalcNonLinear = false;
 	}
 };

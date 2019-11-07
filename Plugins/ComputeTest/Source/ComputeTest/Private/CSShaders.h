@@ -15,6 +15,15 @@ END_UNIFORM_BUFFER_STRUCT(FComputeShaderVariableParameters)
 typedef TUniformBufferRef<FComputeShaderVariableParameters> FComputeShaderVariableParameterRef;
 
 
+BEGIN_UNIFORM_BUFFER_STRUCT(FEWavePSVariableParameters, )
+UNIFORM_MEMBER(float, choppyness)
+UNIFORM_MEMBER(float, dx)
+UNIFORM_MEMBER(float, dy)
+END_UNIFORM_BUFFER_STRUCT(FEWavePSVariableParameters)
+
+
+typedef TUniformBufferRef<FEWavePSVariableParameters> FEWavePSVariableParameterRef;
+
 class FAddSourceHeightCS : public FGlobalShader
 {
 	DECLARE_SHADER_TYPE(FAddSourceHeightCS, Global);
@@ -31,6 +40,8 @@ public:
 		TextureParameter.Bind(Initializer.ParameterMap, TEXT("SrcTexture"));
 		TexMapSampler.Bind(Initializer.ParameterMap, TEXT("TexMapSampler"));
 		H0_phi0_RW.Bind(Initializer.ParameterMap, TEXT("h0_phi_RW"));
+		m_Lx.Bind(Initializer.ParameterMap, TEXT("m_Lx"));
+		m_Ly.Bind(Initializer.ParameterMap, TEXT("m_Ly"));
 	}
 
 	static bool ShouldCache(EShaderPlatform Platform)
@@ -52,6 +63,8 @@ public:
 		FRHICommandList& RHICmdList,
 		const FLinearColor& Color,
 		uint32 useObsMap,
+		float _Lx,
+		float _Ly,
 		const FShaderResourceViewRHIParamRef& TextureParameterSRV,
 		const FShaderResourceViewRHIParamRef& ObstructionParmSRV
 		)
@@ -60,6 +73,9 @@ public:
 
 		SetShaderValue(RHICmdList, ComputeShaderRHI, MyColorParameter, Color);
 		SetShaderValue(RHICmdList, ComputeShaderRHI, bUseObsMap, useObsMap);
+		SetShaderValue(RHICmdList, ComputeShaderRHI, m_Lx, _Lx);
+		SetShaderValue(RHICmdList, ComputeShaderRHI, m_Ly, _Ly);
+
 		if (TextureParameter.IsBound())
 		{
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, TextureParameter.GetBaseIndex(), TextureParameterSRV);
@@ -92,7 +108,7 @@ public:
 	{
 		bool bShaderHasOutdatedParams = FGlobalShader::Serialize(Ar);
 		Ar << MyColorParameter << bUseObsMap << OutputSurface
-			<< ObstructionParm << TextureParameter << TexMapSampler << H0_phi0_RW;
+			<< ObstructionParm << TextureParameter << TexMapSampler << H0_phi0_RW << m_Lx << m_Ly;
 		return bShaderHasOutdatedParams;
 	}
 
@@ -152,6 +168,8 @@ private:
 	FShaderResourceParameter TexMapSampler;
 	FShaderResourceParameter H0_phi0_RW;
 
+	FShaderParameter m_Lx;
+	FShaderParameter m_Ly;
 
 };
 
@@ -279,6 +297,8 @@ public:
 		h0_phi0_RW.Bind(Initializer.ParameterMap, TEXT("h0_phi0_RW"));
 		bUseFlowMap.Bind(Initializer.ParameterMap, TEXT("bUseFlowMap"));
 		velScale.Bind(Initializer.ParameterMap, TEXT("velScale"));
+		m_Lx.Bind(Initializer.ParameterMap, TEXT("m_Lx"));
+		m_Ly.Bind(Initializer.ParameterMap, TEXT("m_Ly"));
 	}
 
 	static bool ShouldCache(EShaderPlatform Platform)
@@ -301,12 +321,16 @@ public:
 		const FShaderResourceViewRHIParamRef& InTextureSRV,
 		const FShaderResourceViewRHIParamRef& _flowMapParameter,
 		uint32 _bUseFlowMap,
-		float _velScale
+		float _velScale,
+		float _Lx,
+		float _Ly
 	)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
 		SetShaderValue(RHICmdList, ComputeShaderRHI, bUseFlowMap, _bUseFlowMap);
 		SetShaderValue(RHICmdList, ComputeShaderRHI, velScale, _velScale);
+		SetShaderValue(RHICmdList, ComputeShaderRHI, m_Lx, _Lx);
+		SetShaderValue(RHICmdList, ComputeShaderRHI, m_Ly, _Ly);
 
 		if (inTextureParameter.IsBound())
 		{
@@ -317,16 +341,11 @@ public:
 
 		if (flowMapParameter.IsBound())
 		{
-			if (_flowMapParameter != NULL)
-			{
-				RHICmdList.SetShaderResourceViewParameter(
-					ComputeShaderRHI, flowMapParameter.GetBaseIndex(), _flowMapParameter);
-			}
-			else
-			{
-				RHICmdList.SetShaderResourceViewParameter(
-					ComputeShaderRHI, flowMapParameter.GetBaseIndex(),FShaderResourceViewRHIRef());
-			}
+			
+			RHICmdList.SetShaderResourceViewParameter(
+				ComputeShaderRHI, flowMapParameter.GetBaseIndex(), _flowMapParameter);
+			
+			
 		}
 		
 		
@@ -346,7 +365,7 @@ public:
 	{
 		bool bShaderHasOutdatedParams = FGlobalShader::Serialize(Ar);
 		Ar << inTextureParameter << flowMapParameter << inTexSampler 
-		   << h0_phi0_RW << bUseFlowMap;
+		   << h0_phi0_RW << bUseFlowMap<< velScale << m_Lx << m_Ly;
 
 		return bShaderHasOutdatedParams;
 	}
@@ -399,6 +418,9 @@ private:
 
 	FShaderParameter bUseFlowMap;
 	FShaderParameter velScale;
+	FShaderParameter m_Lx;
+	FShaderParameter m_Ly;
+	
 };
 
 
@@ -412,9 +434,12 @@ public:
 	{
 		RO_Ht_PHIt.Bind(Initializer.ParameterMap, TEXT("RO_Ht_PHIt"));
 		dx_dy.Bind(Initializer.ParameterMap, TEXT("dx_dy"));
-		RW_Ht_PHIt.Bind(Initializer.ParameterMap, TEXT("RW_Ht_PHIt"));
+		dPhiX_dPhiY.Bind(Initializer.ParameterMap, TEXT("dPhix_dPhiy"));
 		genGrad.Bind(Initializer.ParameterMap, TEXT("genGrad"));
 		calcNonLinear.Bind(Initializer.ParameterMap, TEXT("calcNonLinear"));
+		m_Lx.Bind(Initializer.ParameterMap, TEXT("m_Lx"));
+		m_Ly.Bind(Initializer.ParameterMap, TEXT("m_Ly"));
+
 	}
 
 	static bool ShouldCache(EShaderPlatform Platform)
@@ -437,12 +462,16 @@ public:
 		FRHICommandList& RHICmdList,
 		const FShaderResourceViewRHIParamRef& RO_Ht_PHItSRV,
 		uint32 _bGenGrad,
-		uint32 _bcalcNonLinear
+		uint32 _bcalcNonLinear,
+		float _Lx,
+		float _Ly
 	)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
 		SetShaderValue(RHICmdList, ComputeShaderRHI, genGrad, _bGenGrad);
 		SetShaderValue(RHICmdList, ComputeShaderRHI, calcNonLinear, _bcalcNonLinear);
+		SetShaderValue(RHICmdList, ComputeShaderRHI, m_Lx, _Lx);
+		SetShaderValue(RHICmdList, ComputeShaderRHI, m_Ly, _Ly);
 
 		if (RO_Ht_PHIt.IsBound())
 		{
@@ -454,42 +483,29 @@ public:
 	void SetOutput(
 		FRHICommandList& RHICmdList,
 		FUnorderedAccessViewRHIRef& dx_dyUAV,
-		FUnorderedAccessViewRHIRef& RW_Ht_PHItUAV,
-		uint32 _bGenGrad,
-		uint32 _bcalcNonLinear
+		FUnorderedAccessViewRHIRef& RW_Ht_PHItUAV
 	)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
 		if (dx_dy.IsBound())
 		{
-			if (_bGenGrad)
-			{
-				RHICmdList.SetUAVParameter(ComputeShaderRHI, dx_dy.GetBaseIndex(), dx_dyUAV);
-			}
-			else
-			{
-				RHICmdList.SetUAVParameter(ComputeShaderRHI,
-					dx_dy.GetBaseIndex(), FUnorderedAccessViewRHIRef());
-			}
+			
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, dx_dy.GetBaseIndex(), dx_dyUAV);
+			
 		}
-		if (RW_Ht_PHIt.IsBound())
+		if (dPhiX_dPhiY.IsBound())
 		{
-			if (_bcalcNonLinear)
-			{
-				RHICmdList.SetUAVParameter(ComputeShaderRHI, RW_Ht_PHIt.GetBaseIndex(), RW_Ht_PHItUAV);
-			}
-			else
-			{
-				RHICmdList.SetUAVParameter(ComputeShaderRHI,
-					RW_Ht_PHIt.GetBaseIndex(), FUnorderedAccessViewRHIRef());
-			}
+			
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, dPhiX_dPhiY.GetBaseIndex(), RW_Ht_PHItUAV);
+			
 		}
 	}
 
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParams = FGlobalShader::Serialize(Ar);
-		Ar << RO_Ht_PHIt << dx_dy << RW_Ht_PHIt << genGrad << calcNonLinear;
+		Ar << RO_Ht_PHIt << dx_dy << dPhiX_dPhiY << genGrad << calcNonLinear
+		   << m_Lx << m_Ly;
 
 		return bShaderHasOutdatedParams;
 	}
@@ -510,10 +526,10 @@ public:
 				dx_dy.GetBaseIndex(), FUnorderedAccessViewRHIRef());
 		}
 
-		if (RW_Ht_PHIt.IsBound())
+		if (dPhiX_dPhiY.IsBound())
 		{
 			RHICmdList.SetUAVParameter(ComputeShaderRHI,
-				RW_Ht_PHIt.GetBaseIndex(), FUnorderedAccessViewRHIRef());
+				dPhiX_dPhiY.GetBaseIndex(), FUnorderedAccessViewRHIRef());
 		}
 	}
 
@@ -525,10 +541,12 @@ public:
 private:
 	FShaderResourceParameter RO_Ht_PHIt;
 	FShaderResourceParameter dx_dy;
-	FShaderResourceParameter RW_Ht_PHIt;
+	FShaderResourceParameter dPhiX_dPhiY;
 
 	FShaderParameter genGrad;
 	FShaderParameter calcNonLinear;
+	FShaderParameter m_Lx;
+	FShaderParameter m_Ly;
 
 };
 
@@ -542,10 +560,18 @@ public:
 	{
 		SrcTexture.Bind(Initializer.ParameterMap, TEXT("SrcTexture"));
 		ObsTexture.Bind(Initializer.ParameterMap, TEXT("ObsTexture"));
+		dPhix_dPhiy.Bind(Initializer.ParameterMap, TEXT("dPhix_dPhiy"));
+		dx_dy.Bind(Initializer.ParameterMap, TEXT("dx_dy"));
+		dPhiSampler.Bind(Initializer.ParameterMap, TEXT("dPhiSampler"));
+
 		DstTexture.Bind(Initializer.ParameterMap, TEXT("DstTexture"));
 		h0_phi0_RW.Bind(Initializer.ParameterMap, TEXT("h0_phi0_RW"));
-		dx_dy.Bind(Initializer.ParameterMap, TEXT("dx_dy"));
+		
+		bUseNonLinear.Bind(Initializer.ParameterMap, TEXT("bUseNonLinear"));
 		bUseObsTexture.Bind(Initializer.ParameterMap, TEXT("bUseObsTexture"));
+		advScale.Bind(Initializer.ParameterMap, TEXT("advScale"));
+		m_Lx.Bind(Initializer.ParameterMap, TEXT("m_Lx"));
+		m_Ly.Bind(Initializer.ParameterMap, TEXT("m_Ly"));
 	}
 
 	static bool ShouldCache(EShaderPlatform Platform)
@@ -567,13 +593,12 @@ public:
 		FRHICommandList& RHICmdList,
 		const FShaderResourceViewRHIParamRef& InTextureSRV,
 		const FShaderResourceViewRHIParamRef& dx_dySRV,
-		const FShaderResourceViewRHIParamRef& obsTextureSRV,
-		uint32 _useObsTex
+		const FShaderResourceViewRHIParamRef& dPhix_dPhiySRV,
+		const FShaderResourceViewRHIParamRef& obsTextureSRV
+		
 	)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
-		
-		SetShaderValue(RHICmdList, ComputeShaderRHI, bUseObsTexture, _useObsTex);
 
 		if (SrcTexture.IsBound())
 		{
@@ -582,20 +607,44 @@ public:
 
 		if (ObsTexture.IsBound())
 		{
-			if (_useObsTex)
-			{
-				RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, ObsTexture.GetBaseIndex(), obsTextureSRV);
-			}
-			else
-			{
-				RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, ObsTexture.GetBaseIndex(), FShaderResourceViewRHIRef());
-			}
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, ObsTexture.GetBaseIndex(), obsTextureSRV);	
 		}
 
 		if (dx_dy.IsBound())
 		{
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, dx_dy.GetBaseIndex(), dx_dySRV);
 		}
+
+		if (dPhix_dPhiy.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, dPhix_dPhiy.GetBaseIndex(), dPhix_dPhiySRV);
+		}
+		
+		if (dPhiSampler.IsBound())
+		{
+			FSamplerStateRHIParamRef SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+			SetSamplerParameter(RHICmdList, ComputeShaderRHI, dPhiSampler, SamplerStateLinear);
+		}
+		
+	}
+
+	void SetParameters(
+		FRHICommandList& RHICmdList,
+		uint32 _useNonLinear,
+		uint32 _useObsTex,
+		float _advScale,
+		float _Lx,
+		float _Ly
+	)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+
+		SetShaderValue(RHICmdList, ComputeShaderRHI, bUseObsTexture, _useObsTex);
+		SetShaderValue(RHICmdList, ComputeShaderRHI, m_Lx, _Lx);
+		SetShaderValue(RHICmdList, ComputeShaderRHI, m_Ly, _Ly);
+		SetShaderValue(RHICmdList, ComputeShaderRHI, bUseNonLinear, _useNonLinear);
+		SetShaderValue(RHICmdList, ComputeShaderRHI, advScale, _advScale);
+
 	}
 
 	void SetOutput(FRHICommandList& RHICmdList, const FUnorderedAccessViewRHIRef& outStructBufferUAV, const FUnorderedAccessViewRHIRef& dstTextureUAV)
@@ -616,8 +665,9 @@ public:
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParams = FGlobalShader::Serialize(Ar);
-		Ar << SrcTexture << ObsTexture << DstTexture << h0_phi0_RW
-		   << dx_dy << bUseObsTexture;
+		Ar << SrcTexture << ObsTexture << dPhix_dPhiy << dx_dy << dPhiSampler 
+			<< DstTexture << h0_phi0_RW << bUseNonLinear << bUseObsTexture 
+			<< advScale << m_Lx << m_Ly;
 
 		return bShaderHasOutdatedParams;
 	}
@@ -667,6 +717,12 @@ public:
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, 
 				dx_dy.GetBaseIndex(), FShaderResourceViewRHIRef());
 		}
+
+		if (dPhix_dPhiy.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
+				dPhix_dPhiy.GetBaseIndex(), FShaderResourceViewRHIRef());
+		}
 	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -677,13 +733,21 @@ public:
 private:
 	FShaderResourceParameter SrcTexture;
 	FShaderResourceParameter ObsTexture;
+	FShaderResourceParameter dPhix_dPhiy;
+	FShaderResourceParameter dx_dy;
+	FShaderResourceParameter dPhiSampler;
+
 	FShaderResourceParameter DstTexture;
 	FShaderResourceParameter h0_phi0_RW;
-	FShaderResourceParameter dx_dy;
-
+	
+	FShaderParameter bUseNonLinear;
 	FShaderParameter bUseObsTexture;
+	FShaderParameter advScale;
+	FShaderParameter m_Lx;
+	FShaderParameter m_Ly;
 
 };
+
 
 
 
@@ -743,15 +807,23 @@ public:
 	{
 		TextureParameter.Bind(Initializer.ParameterMap, TEXT("TextureParameter"));
 		TexMapSampler.Bind(Initializer.ParameterMap, TEXT("TexMapSampler"));
+		choppyness.Bind(Initializer.ParameterMap, TEXT("choppyness"));
+		L_x.Bind(Initializer.ParameterMap, TEXT("L_x"));
+		L_y.Bind(Initializer.ParameterMap, TEXT("L_y"));
 	}
 	
 	void SetParameters(
 		FRHICommandList& RHICmdList,
 		FShaderResourceViewRHIParamRef TextureParameterSRV,
-		FTextureRHIParamRef InputTextureRef
+		FTextureRHIParamRef InputTextureRef,
+		float _choppy, float _Lx, float _Ly
 	)
 	{
 		FPixelShaderRHIParamRef PixelShaderRHI = GetPixelShader();
+
+		SetShaderValue(RHICmdList, PixelShaderRHI, choppyness, _choppy);
+		SetShaderValue(RHICmdList, PixelShaderRHI, L_x, _Lx);
+		SetShaderValue(RHICmdList, PixelShaderRHI, L_y, _Ly);
 
 		if (TextureParameter.IsBound()) {
 			
@@ -775,15 +847,27 @@ public:
 		}
 	}
 
+	void SetUniformBuffers(FRHICommandList& RHICmdList, const FEWavePSVariableParameters& VariableParameters)
+	{
+		FEWavePSVariableParameterRef VariableParametersBuffer;
+
+		VariableParametersBuffer = FEWavePSVariableParameterRef::CreateUniformBufferImmediate(
+			VariableParameters, UniformBuffer_SingleFrame);
+
+		SetUniformBufferParameter(RHICmdList, GetPixelShader(),
+			GetUniformBufferParameter<FEWavePSVariableParameters>(),
+			VariableParametersBuffer);
+	}
+
 	static bool ShouldCache(EShaderPlatform Platform)
 	{
 		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
 	}
 
-	virtual bool Serialize(FArchive &Ar) override 
+	virtual bool Serialize(FArchive &Ar) override
 	{
 		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << TextureParameter << TexMapSampler;
+		Ar << TextureParameter << TexMapSampler << choppyness << L_x << L_y;
 		return bShaderHasOutdatedParameters;
 	}
 
@@ -797,12 +881,16 @@ public:
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.CompilerFlags.Add(CFLAG_StandardOptimization);
 		OutEnvironment.SetDefine(TEXT("DISP_MAP"), 1);
-		
+
 	}
 
 private:
 	FShaderResourceParameter TextureParameter;
 	FShaderResourceParameter TexMapSampler;
+
+	FShaderParameter choppyness;
+	FShaderParameter L_x;
+	FShaderParameter L_y;
 };
 
 
@@ -817,12 +905,21 @@ public:
 	{
 		SrcTexParm.Bind(Initializer.ParameterMap, TEXT("SrcTexParm"));
 		SrcTexSampler.Bind(Initializer.ParameterMap, TEXT("SrcTexSampler"));
+		choppyness.Bind(Initializer.ParameterMap, TEXT("choppyness"));
+		L_x.Bind(Initializer.ParameterMap, TEXT("L_x"));
+		L_y.Bind(Initializer.ParameterMap, TEXT("L_y"));
+
 	}
 
 	void SetParameters(FRHICommandList& RHICmdList,
-		const FTextureRHIParamRef& TextureRHI)
+		const FTextureRHIParamRef& TextureRHI, 
+		float _choppy, float _Lx, float _Ly)
 	{
 		FPixelShaderRHIParamRef PixelShaderRHI = GetPixelShader();
+
+		SetShaderValue(RHICmdList, PixelShaderRHI, choppyness, _choppy);
+		SetShaderValue(RHICmdList, PixelShaderRHI, L_x, _Lx);
+		SetShaderValue(RHICmdList, PixelShaderRHI, L_y, _Ly);
 
 		FSamplerStateRHIParamRef SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 		SetTextureParameter(RHICmdList, PixelShaderRHI, SrcTexParm, SrcTexSampler, SamplerStateLinear, TextureRHI);
@@ -838,13 +935,21 @@ public:
 			RHICmdList.SetShaderResourceViewParameter(
 				PixelShaderRHI, SrcTexParm.IsBound(), FShaderResourceViewRHIRef());
 		}
+		
 
+	}
+
+	void SetUniformBuffers(FRHICommandList& RHICmdList, const FEWavePSVariableParameterRef& VariableParametersBuffer)
+	{
+		SetUniformBufferParameter(RHICmdList, GetPixelShader(),
+			GetUniformBufferParameter<FEWavePSVariableParameters>(),
+			VariableParametersBuffer);
 	}
 
 	virtual bool Serialize(FArchive &Ar) override
 	{
 		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << SrcTexParm << SrcTexSampler;
+		Ar << SrcTexParm << SrcTexSampler << choppyness << L_x << L_y;
 		return bShaderHasOutdatedParameters;
 	}
 
@@ -856,7 +961,7 @@ public:
 	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
 	{
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
-		//OutEnvironment.CompilerFlags.Add(CFLAG_StandardOptimization);
+		OutEnvironment.CompilerFlags.Add(CFLAG_StandardOptimization);
 		OutEnvironment.SetDefine(TEXT("NORMAL_MAP"), 1);
 
 	}
@@ -872,4 +977,7 @@ private:
 	FShaderResourceParameter SrcTexParm;
 	FShaderResourceParameter SrcTexSampler;
 
+	FShaderParameter choppyness;
+	FShaderParameter L_x;
+	FShaderParameter L_y;
 };

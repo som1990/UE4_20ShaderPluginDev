@@ -4,6 +4,7 @@
 
 
 IMPLEMENT_UNIFORM_BUFFER_STRUCT(FComputeShaderVariableParameters, TEXT("CSVariables"))
+IMPLEMENT_UNIFORM_BUFFER_STRUCT(FEWavePSVariableParameters, TEXT("DispPerFrame"))
 
 IMPLEMENT_SHADER_TYPE(, FAddSourceHeightCS, TEXT("/Plugin/ComputeTest/Private/MyCS.usf"), TEXT("AddSourceHeightCS"), SF_Compute);
 IMPLEMENT_SHADER_TYPE(, FCalcEWaveCS, TEXT("/Plugin/ComputeTest/Private/MyCS.usf"), TEXT("CalcEWaveCS"), SF_Compute);
