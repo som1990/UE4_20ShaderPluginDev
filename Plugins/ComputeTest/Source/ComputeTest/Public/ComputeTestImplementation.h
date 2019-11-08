@@ -36,14 +36,18 @@ public:
 	bool ExecuteApplyFields(
 		FRHICommandListImmediate& RHICmdList, float _velScale,
 		const FShaderResourceViewRHIRef& _SrcTexSRV, const FShaderResourceViewRHIRef& gradTexSRV,
-		const FShaderResourceViewRHIRef& obsTexSRV,
-		FUnorderedAccessViewRHIRef& StructBufferUAV, FUnorderedAccessViewRHIRef& _DstTexUAV
+		const FShaderResourceViewRHIRef& dPhiSRV, const FShaderResourceViewRHIRef& obsTexSRV,
+		const FShaderResourceViewRHIRef& dH_dySRV, FUnorderedAccessViewRHIRef& StructBufferUAV,
+		 FUnorderedAccessViewRHIRef& _DstTexUAV, FUnorderedAccessViewRHIRef& outGradUAV
+		
 	);
 	bool ExecuteNonLinearAndGrad(
 		FRHICommandListImmediate& RHICmdList, 
 		const FShaderResourceViewRHIRef& SrcSRV, 
-		FUnorderedAccessViewRHIRef& gradUAV, FUnorderedAccessViewRHIRef& dstUAV);
+		FUnorderedAccessViewRHIRef& gradUAV, FUnorderedAccessViewRHIRef& dPhiUAV,
+		FUnorderedAccessViewRHIRef& dHUAV);
 	FTexture2DRHIRef GetTexture() { return OutTexture; }
+	FTexture2DRHIRef GetGradTexture() { return OutGradTexture; }
 
 protected:
 	void CreateBufferAndUAV(FResourceArrayInterface* Data, uint32 byte_width, uint32 byte_stride, FStructuredBufferRHIRef* ppBuffer, FUnorderedAccessViewRHIRef* ppUAV, FShaderResourceViewRHIRef* ppSRV);
@@ -107,9 +111,17 @@ private:
 	FUnorderedAccessViewRHIRef DvxDvyTextureUAV;
 	FShaderResourceViewRHIRef DvxDvyTextureSRV;
 
+	FTexture2DRHIRef OutGradTexture;
+	FUnorderedAccessViewRHIRef OutGradTextureUAV;
+
+	FTexture2DRHIRef dHx_dHyTexture;
+	FUnorderedAccessViewRHIRef dHx_dHyTextureUAV;
+	FShaderResourceViewRHIRef dHx_dHyTextureSRV;
+
 	FStructuredBufferRHIRef h0_phi0_SB_RW;
 	FUnorderedAccessViewRHIRef h0_phi0_UAV;
 	FShaderResourceViewRHIRef h0_phi0_SRV;
+
 
 	FComputeShaderVariableParameters m_VariableParameters;
 	

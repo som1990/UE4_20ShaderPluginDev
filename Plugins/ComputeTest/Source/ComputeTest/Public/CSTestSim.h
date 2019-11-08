@@ -38,6 +38,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	UTextureRenderTarget2D* NormalMapRenderTarget;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UTextureRenderTarget2D* GradMapRenderTarget;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Config)
 	FEWaveData EWaveConfig;
 

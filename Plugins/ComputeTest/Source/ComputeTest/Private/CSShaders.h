@@ -435,6 +435,7 @@ public:
 		RO_Ht_PHIt.Bind(Initializer.ParameterMap, TEXT("RO_Ht_PHIt"));
 		dx_dy.Bind(Initializer.ParameterMap, TEXT("dx_dy"));
 		dPhiX_dPhiY.Bind(Initializer.ParameterMap, TEXT("dPhix_dPhiy"));
+		dHx_dHy.Bind(Initializer.ParameterMap, TEXT("dHx_dHy"));
 		genGrad.Bind(Initializer.ParameterMap, TEXT("genGrad"));
 		calcNonLinear.Bind(Initializer.ParameterMap, TEXT("calcNonLinear"));
 		m_Lx.Bind(Initializer.ParameterMap, TEXT("m_Lx"));
@@ -483,7 +484,8 @@ public:
 	void SetOutput(
 		FRHICommandList& RHICmdList,
 		FUnorderedAccessViewRHIRef& dx_dyUAV,
-		FUnorderedAccessViewRHIRef& RW_Ht_PHItUAV
+		FUnorderedAccessViewRHIRef& dPhix_dPhiYUAV,
+		FUnorderedAccessViewRHIRef& dHx_dHyUAV
 	)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
@@ -496,15 +498,21 @@ public:
 		if (dPhiX_dPhiY.IsBound())
 		{
 			
-			RHICmdList.SetUAVParameter(ComputeShaderRHI, dPhiX_dPhiY.GetBaseIndex(), RW_Ht_PHItUAV);
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, dPhiX_dPhiY.GetBaseIndex(), dPhix_dPhiYUAV);
 			
+		}
+		if (dHx_dHy.IsBound())
+		{
+
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, dHx_dHy.GetBaseIndex(), dHx_dHyUAV);
+
 		}
 	}
 
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParams = FGlobalShader::Serialize(Ar);
-		Ar << RO_Ht_PHIt << dx_dy << dPhiX_dPhiY << genGrad << calcNonLinear
+		Ar << RO_Ht_PHIt << dx_dy << dPhiX_dPhiY << dHx_dHy << genGrad << calcNonLinear
 		   << m_Lx << m_Ly;
 
 		return bShaderHasOutdatedParams;
@@ -531,6 +539,13 @@ public:
 			RHICmdList.SetUAVParameter(ComputeShaderRHI,
 				dPhiX_dPhiY.GetBaseIndex(), FUnorderedAccessViewRHIRef());
 		}
+		if (dHx_dHy.IsBound())
+		{
+
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, 
+				dHx_dHy.GetBaseIndex(), FUnorderedAccessViewRHIRef());
+
+		}
 	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -542,6 +557,7 @@ private:
 	FShaderResourceParameter RO_Ht_PHIt;
 	FShaderResourceParameter dx_dy;
 	FShaderResourceParameter dPhiX_dPhiY;
+	FShaderResourceParameter dHx_dHy;
 
 	FShaderParameter genGrad;
 	FShaderParameter calcNonLinear;
@@ -562,9 +578,11 @@ public:
 		ObsTexture.Bind(Initializer.ParameterMap, TEXT("ObsTexture"));
 		dPhix_dPhiy.Bind(Initializer.ParameterMap, TEXT("dPhix_dPhiy"));
 		dx_dy.Bind(Initializer.ParameterMap, TEXT("dx_dy"));
+		SrcdHx_dHy.Bind(Initializer.ParameterMap, TEXT("SrcdHx_dHy"));
 		dPhiSampler.Bind(Initializer.ParameterMap, TEXT("dPhiSampler"));
 
 		DstTexture.Bind(Initializer.ParameterMap, TEXT("DstTexture"));
+		DstGradTexture.Bind(Initializer.ParameterMap, TEXT("DstGradTexture"));
 		h0_phi0_RW.Bind(Initializer.ParameterMap, TEXT("h0_phi0_RW"));
 		
 		bUseNonLinear.Bind(Initializer.ParameterMap, TEXT("bUseNonLinear"));
@@ -594,7 +612,9 @@ public:
 		const FShaderResourceViewRHIParamRef& InTextureSRV,
 		const FShaderResourceViewRHIParamRef& dx_dySRV,
 		const FShaderResourceViewRHIParamRef& dPhix_dPhiySRV,
-		const FShaderResourceViewRHIParamRef& obsTextureSRV
+		const FShaderResourceViewRHIParamRef& obsTextureSRV,
+		const FShaderResourceViewRHIParamRef& SrcdHx_dHySRV
+
 		
 	)
 	{
@@ -626,6 +646,11 @@ public:
 			SetSamplerParameter(RHICmdList, ComputeShaderRHI, dPhiSampler, SamplerStateLinear);
 		}
 		
+		if (SrcdHx_dHy.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
+				SrcdHx_dHy.GetBaseIndex(), SrcdHx_dHySRV);
+		}
 	}
 
 	void SetParameters(
@@ -647,7 +672,9 @@ public:
 
 	}
 
-	void SetOutput(FRHICommandList& RHICmdList, const FUnorderedAccessViewRHIRef& outStructBufferUAV, const FUnorderedAccessViewRHIRef& dstTextureUAV)
+	void SetOutput(
+		FRHICommandList& RHICmdList, const FUnorderedAccessViewRHIRef& outStructBufferUAV, 
+		const FUnorderedAccessViewRHIRef& dstTextureUAV, const FUnorderedAccessViewRHIRef& outGradTexUAV)
 	{
 		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
 
@@ -660,13 +687,19 @@ public:
 		{
 			RHICmdList.SetUAVParameter(ComputeShaderRHI, DstTexture.GetBaseIndex(), dstTextureUAV);
 		}
+
+		if (DstGradTexture.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI,
+				DstGradTexture.GetBaseIndex(), outGradTexUAV);
+		}
 	}
 
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParams = FGlobalShader::Serialize(Ar);
-		Ar << SrcTexture << ObsTexture << dPhix_dPhiy << dx_dy << dPhiSampler 
-			<< DstTexture << h0_phi0_RW << bUseNonLinear << bUseObsTexture 
+		Ar << SrcTexture << ObsTexture << dPhix_dPhiy << dx_dy << SrcdHx_dHy << dPhiSampler 
+			<< DstTexture << DstGradTexture << h0_phi0_RW << bUseNonLinear << bUseObsTexture 
 			<< advScale << m_Lx << m_Ly;
 
 		return bShaderHasOutdatedParams;
@@ -700,6 +733,12 @@ public:
 				DstTexture.GetBaseIndex(), FUnorderedAccessViewRHIRef());
 		}
 
+		if (DstGradTexture.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI,
+				DstGradTexture.GetBaseIndex(), FUnorderedAccessViewRHIRef());
+		}
+
 		if (SrcTexture.IsBound())
 		{
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
@@ -723,6 +762,13 @@ public:
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
 				dPhix_dPhiy.GetBaseIndex(), FShaderResourceViewRHIRef());
 		}
+		
+		if (SrcdHx_dHy.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI,
+				SrcdHx_dHy.GetBaseIndex(), FShaderResourceViewRHIRef());
+		}
+		
 	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -735,9 +781,11 @@ private:
 	FShaderResourceParameter ObsTexture;
 	FShaderResourceParameter dPhix_dPhiy;
 	FShaderResourceParameter dx_dy;
+	FShaderResourceParameter SrcdHx_dHy;
 	FShaderResourceParameter dPhiSampler;
 
 	FShaderResourceParameter DstTexture;
+	FShaderResourceParameter DstGradTexture;
 	FShaderResourceParameter h0_phi0_RW;
 	
 	FShaderParameter bUseNonLinear;
@@ -980,4 +1028,69 @@ private:
 	FShaderParameter choppyness;
 	FShaderParameter L_x;
 	FShaderParameter L_y;
+};
+
+class FMyDisplayGradPS : public FGlobalShader
+{
+	DECLARE_SHADER_TYPE(FMyDisplayGradPS, Global);
+
+public:
+	FMyDisplayGradPS() {}
+	FMyDisplayGradPS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		:FGlobalShader(Initializer)
+	{
+		SrcGradParm.Bind(Initializer.ParameterMap, TEXT("SrcGradParm"));
+		SrcTexSampler.Bind(Initializer.ParameterMap, TEXT("SrcTexSampler"));
+	}
+
+	void SetParameters(FRHICommandList& RHICmdList,
+		const FTextureRHIParamRef& TextureRHI)
+	{
+		FPixelShaderRHIParamRef PixelShaderRHI = GetPixelShader();
+
+		FSamplerStateRHIParamRef SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+		SetTextureParameter(RHICmdList, PixelShaderRHI, SrcGradParm, SrcTexSampler, SamplerStateLinear, TextureRHI);
+
+	}
+
+	void UnbindBuffers(FRHICommandList& RHICmdList)
+	{
+		FPixelShaderRHIParamRef PixelShaderRHI = GetPixelShader();
+
+		if (SrcGradParm.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(
+				PixelShaderRHI, SrcGradParm.IsBound(), FShaderResourceViewRHIRef());
+		}
+
+	}
+
+	virtual bool Serialize(FArchive &Ar) override
+	{
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << SrcGradParm << SrcTexSampler;
+		return bShaderHasOutdatedParameters;
+	}
+
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
+
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.CompilerFlags.Add(CFLAG_StandardOptimization);
+		OutEnvironment.SetDefine(TEXT("DISPLAY_GRAD"), 1);
+
+	}
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters &Parameters)
+	{
+		return true;
+	}
+
+private:
+	FShaderResourceParameter SrcGradParm;
+	FShaderResourceParameter SrcTexSampler;
 };

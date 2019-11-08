@@ -64,7 +64,7 @@ FComputeTestExecute::FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLe
 	FRHIResourceCreateInfo createDvxDvyInfo;
 	DvxDvyTexture = RHICreateTexture2D(sizeX, sizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createDvxDvyInfo);
 	DvxDvyTextureUAV = RHICreateUnorderedAccessView(DvxDvyTexture);
-	DvxDvyTextureSRV = RHICreateShaderResourceView(DvxDvyTexture, 0);
+	DvxDvyTextureSRV = RHICreateShaderResourceView(DvxDvyTexture, 0);	
 
 	FRHIResourceCreateInfo createTransInfo;
 	TransitionTexture = RHICreateTexture2D(sizeX, sizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createTransInfo);
@@ -76,8 +76,18 @@ FComputeTestExecute::FComputeTestExecute(int32 sizeX, int32 sizeY, ERHIFeatureLe
 	FFTTransitionTextureUAV = RHICreateUnorderedAccessView(FFTTransitionTexture);
 	FFTTransitionTextureSRV = RHICreateShaderResourceView(FFTTransitionTexture, 0);
 
+	FRHIResourceCreateInfo createOutGradInfo;
+	OutGradTexture = RHICreateTexture2D(sizeX, sizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createOutGradInfo);
+	OutGradTextureUAV = RHICreateUnorderedAccessView(OutGradTexture);
+
+	FRHIResourceCreateInfo createdHInfo;
+	dHx_dHyTexture = RHICreateTexture2D(sizeX, sizeY, PF_A32B32G32R32F, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, createdHInfo);
+	dHx_dHyTextureUAV = RHICreateUnorderedAccessView(dHx_dHyTexture);
+	dHx_dHyTextureSRV = RHICreateShaderResourceView(dHx_dHyTexture, 0);
 
 	FrequencySize = FIntPoint(FMath::RoundUpToPowerOfTwo(sizeX), FMath::RoundUpToPowerOfTwo(sizeY));
+
+	
 
 	int output_size = sizeX * sizeY;
 	TResourceArray<FVector4> h0_phi0_data;
@@ -273,6 +283,34 @@ void FComputeTestExecute::ClearInternalData()
 	{
 		DvxDvyTexture.SafeRelease();
 		DvxDvyTexture = NULL;
+	}
+	if (OutGradTextureUAV != NULL)
+	{
+		OutGradTextureUAV.SafeRelease();
+		OutGradTextureUAV = NULL;
+	}
+	
+
+	if (OutGradTexture != NULL)
+	{
+		OutGradTexture.SafeRelease();
+		OutGradTexture = NULL;
+	}
+	
+	if (dHx_dHyTextureUAV != NULL)
+	{
+		dHx_dHyTextureUAV.SafeRelease();
+		dHx_dHyTextureUAV = NULL;
+	}
+	if (dHx_dHyTextureSRV != NULL)
+	{
+		dHx_dHyTextureSRV.SafeRelease();
+		dHx_dHyTextureSRV = NULL;
+	}
+	if (dHx_dHyTexture != NULL)
+	{
+		dHx_dHyTexture.SafeRelease();
+		dHx_dHyTexture = NULL;
 	}
 }
 
@@ -508,7 +546,8 @@ void FComputeTestExecute::ExecuteComputeShader(
 			if (SuccessInput)
 			{
 				SuccessInput = MyShader->ExecuteFFT(
-					RHICmdList, MyShader->TransitionTextureSRV, MyShader->FFTTransitionTextureUAV, true);
+					RHICmdList, MyShader->TransitionTextureSRV,
+					MyShader->FFTTransitionTextureUAV, true);
 			}
 		}
 		);
@@ -522,7 +561,8 @@ void FComputeTestExecute::ExecuteComputeShader(
 			if (SuccessInput)
 			{
 				SuccessInput = MyShader->ExecuteNonLinearAndGrad(
-					RHICmdList, MyShader->FFTTransitionTextureSRV, MyShader->DxDyTextureUAV, MyShader->DvxDvyTextureUAV);
+					RHICmdList, MyShader->FFTTransitionTextureSRV, MyShader->DxDyTextureUAV, 
+					MyShader->DvxDvyTextureUAV, MyShader->dHx_dHyTextureUAV);
 			}
 
 		}
@@ -558,6 +598,17 @@ void FComputeTestExecute::ExecuteComputeShader(
 			}
 		}
 		);
+		ENQUEUE_RENDER_COMMAND(InverseFFTdH)(
+			[MyShader, &SuccessInput](FRHICommandListImmediate& RHICmdList)
+		{
+			SCOPED_GPU_STAT(RHICmdList, SIM_Total);
+			if (SuccessInput)
+			{
+				SuccessInput = MyShader->ExecuteFFT(RHICmdList,
+					MyShader->dHx_dHyTextureSRV,MyShader->dHx_dHyTextureUAV , false);
+			}
+		}
+		);
 	}
 
 	ENQUEUE_RENDER_COMMAND(ApplyFields)(
@@ -587,9 +638,9 @@ void FComputeTestExecute::ExecuteComputeShader(
 		if (SuccessInput)
 		{
 			SuccessInput = MyShader->ExecuteApplyFields(
-				RHICmdList, 1.0, MyShader->TransitionTextureSRV, MyShader->DxDyTextureSRV,
-				MyShader->ObsTextureSRV,
-				MyShader->h0_phi0_UAV, MyShader->OutTextureUAV);
+				RHICmdList,1.0, MyShader->TransitionTextureSRV, 
+				MyShader->DxDyTextureSRV, MyShader->DvxDvyTextureSRV, MyShader->ObsTextureSRV, MyShader->dHx_dHyTextureSRV,
+				MyShader->h0_phi0_UAV, MyShader->OutTextureUAV, MyShader->OutGradTextureUAV);
 			RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, MyShader->OutTextureUAV);
 		}
 	}
@@ -724,8 +775,10 @@ bool FComputeTestExecute::ExecuteAdvectFields(
 bool FComputeTestExecute::ExecuteApplyFields(
 	FRHICommandListImmediate& RHICmdList, float _velScale,
 	const FShaderResourceViewRHIRef& _SrcTexSRV, const FShaderResourceViewRHIRef& gradTexSRV,
-	const FShaderResourceViewRHIRef& obsTexSRV,
-	FUnorderedAccessViewRHIRef& StructBufferUAV, FUnorderedAccessViewRHIRef& _DstTexUAV
+	const FShaderResourceViewRHIRef& dPhiSRV, const FShaderResourceViewRHIRef& obsTexSRV,
+	 const FShaderResourceViewRHIRef& dH_dySRV,
+	FUnorderedAccessViewRHIRef& StructBufferUAV, FUnorderedAccessViewRHIRef& _DstTexUAV,
+	FUnorderedAccessViewRHIRef& outGradUAV
 	)
 {
 	check(IsInRenderingThread());
@@ -737,9 +790,9 @@ bool FComputeTestExecute::ExecuteApplyFields(
 
 	TShaderMapRef<FApplyFieldsCS> ComputeShader(GetGlobalShaderMap(FeatureLevel));
 	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
-	ComputeShader->SetParameters(RHICmdList, _SrcTexSRV, gradTexSRV, DvxDvyTextureSRV, obsTexSRV);
+	ComputeShader->SetParameters(RHICmdList, _SrcTexSRV, gradTexSRV, dPhiSRV, obsTexSRV, dH_dySRV);
 	ComputeShader->SetParameters(RHICmdList, bcalcNonLinear, bUseObsMap, _velScale, m_Lx, m_Ly);
-	ComputeShader->SetOutput(RHICmdList, StructBufferUAV, _DstTexUAV);
+	ComputeShader->SetOutput(RHICmdList, StructBufferUAV, _DstTexUAV, outGradUAV);
 	//ComputeShader->SetUniformBuffers(RHICmdList, m_VariableParameters);
 
 	DispatchComputeShader(
@@ -753,7 +806,8 @@ bool FComputeTestExecute::ExecuteApplyFields(
 
 bool FComputeTestExecute::ExecuteNonLinearAndGrad(
 	FRHICommandListImmediate& RHICmdList, const FShaderResourceViewRHIRef& SrcSRV, 
-	FUnorderedAccessViewRHIRef& gradUAV, FUnorderedAccessViewRHIRef& dstUAV)
+	FUnorderedAccessViewRHIRef& gradUAV, FUnorderedAccessViewRHIRef& dPhiUAV, 
+	FUnorderedAccessViewRHIRef& dHUAV)
 {
 	check(IsInRenderingThread());
 	if (bIsUnloading)
@@ -765,7 +819,7 @@ bool FComputeTestExecute::ExecuteNonLinearAndGrad(
 	TShaderMapRef<FGenGradCS> ComputeShader(GetGlobalShaderMap(FeatureLevel));
 	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
 	ComputeShader->SetParameters(RHICmdList, SrcSRV, bGenGrad, bcalcNonLinear, m_Lx, m_Ly);
-	ComputeShader->SetOutput(RHICmdList, gradUAV, dstUAV);
+	ComputeShader->SetOutput(RHICmdList, gradUAV, dPhiUAV, dHUAV);
 	DispatchComputeShader(RHICmdList, *ComputeShader, FMath::CeilToInt(OutTexture->GetSizeX() / NUM_THREADS_PER_GROUP), FMath::CeilToInt(OutTexture->GetSizeY() / NUM_THREADS_PER_GROUP), 1);
 	ComputeShader->UnbindBuffers(RHICmdList);
 	return true;

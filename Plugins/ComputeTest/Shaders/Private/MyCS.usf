@@ -65,10 +65,8 @@ void AddSourceHeightCS(uint3 ThreadId : SV_DispatchThreadID)
     //Calculate obstruction map
     float4 obsHeight = 0.0f;
     if(bUseObsMap){
-        obsHeight = clamp(SrcObstruction[ThreadId.xy],0.0f,1.0f) * -h0_phi_RW[idx];
+        obsHeight = ((float)clamp(SrcObstruction[ThreadId.xy].r,0.0f,1.0f)) * -h0_phi_RW[idx];
     }
-
-    float LMag = sqrt(m_Lx*m_Lx + m_Ly*m_Ly);
 
     float2 uv = float2(ThreadId.xy)/ float2(width * 1.0f, height *1.0f);
     float4 output = SrcTexture[ThreadId.xy];
@@ -81,7 +79,6 @@ void AddSourceHeightCS(uint3 ThreadId : SV_DispatchThreadID)
     h0_phi_RW[idx] *= bound; 
     OutputSurface[ThreadId.xy] = h0_phi_RW[idx]; 
 
-    return;
 }
 
 #endif //ADD_SOURCE_HEIGHTFIELD
@@ -111,10 +108,10 @@ void CalcEWaveCS(uint3 ThreadId : SV_DispatchThreadID)
     float width, height;
     In_hT_pT.GetDimensions(width, height);
     
-    if ((ThreadId.x >= width) || (ThreadId.y >= height)) { return; }
+    //if ((ThreadId.x >= width) || (ThreadId.y >= height)) { return; }
 
-    uint i = ThreadId.x;
-    uint j = ThreadId.y;
+    float i = (float)ThreadId.x;
+    float j = (float)ThreadId.y;
 
     //TODO: Need to implement size of Grid in World Size (Lx, Ly)
     float dkx = 2.0 * PI * 1.0/worldGridWidth; 
@@ -126,21 +123,24 @@ void CalcEWaveCS(uint3 ThreadId : SV_DispatchThreadID)
 
     if (float(j) <= height/2.0) ky = j * dky;
     else ky = (j - height) * dky;
-
+    
+    //ky = (-height / 2.0 + j) * dky;
+    //kx = (-width / 2.0 + i) * dkx;
     //float n = ThreadId.x - 256.0f;
     //float m = ThreadId.y - 256.0f;
-    uint index = i + j*width;
-    //kx = 2 * PI * n/ 512.0f;
-    //ky = 2 * PI * m/ 512.0f;
+    uint index = ThreadId.x + ThreadId.y*width;
+   
 
     float mk = sqrt(kx*kx + ky*ky);
 
     float w = sqrt(GRAV*mk);
     float4 ht_pt = In_hT_pT[ThreadId.xy];
     float coswk, sinwk;
+    
     sincos(w*CSVariables.deltaTime, sinwk, coswk);
-    float2 hT, pT;
-    if (mk != 0)
+    float2 hT = 0.0f;
+    float2 pT = 0.0f;
+    if (w > 1e-12f)
     {
         hT.x = coswk*ht_pt.r + (mk / w) * sinwk * ht_pt.b; // h.real
         hT.y = coswk*ht_pt.g + (mk / w) * sinwk * ht_pt.a; // h.imag
@@ -149,9 +149,10 @@ void CalcEWaveCS(uint3 ThreadId : SV_DispatchThreadID)
         pT.y = coswk*ht_pt.a - (GRAV / w) * sinwk * ht_pt.g; // phi.imag
 
         //Out_hT_pT[ThreadId.xy] = float4(In_hT_pT[ThreadId.xy].x,In_hT_pT[ThreadId.xy].y, 0.0, 0.0 );
-
-        Out_hT_pT[ThreadId.xy] = float4(hT.x,hT.y, pT.x, pT.y);
     }
+
+    Out_hT_pT[ThreadId.xy] = float4(hT.x,hT.y, pT.x, pT.y);
+   
 }
 
 #endif //CALC_EWAVE
@@ -180,30 +181,65 @@ void AdvectFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
 
     SrcTexture.GetDimensions(width, height);
     int idx = ThreadId.x  + ThreadId.y * width;
+    float inv_Lx = 1.0 /m_Lx;
+    float inv_Ly = 1.0 /m_Ly;
+    float dt = CSVariables.deltaTime;
     
     float4 value = 0.0f;
-    if (bUseFlowMap)
-    {
-        float i = ((float)ThreadId.x);
-        float j = ((float)ThreadId.y);
+    
 
-        float u0 = i/((float)width);
+    if (bUseFlowMap && velScale > 0.0)
+    {
+        float i = ((float)ThreadId.x) + 0.5;
+        float j = ((float)ThreadId.y) + 0.5;
+
+        //Modified Macormac Advection
+        float x = i;
+        float y = j;
+        float u = x/((float)width);
+        float v = y/((float)height);
+        float2 dVel = FlowMap.SampleLevel(SrcSampler, float2(u,v),0).rg;
+        float4 vel = float4((dVel.r - 0.5f)*2.0f, (dVel.g - 0.5f)*2.0f,0.0f,0.0f);
+
+        float x_fwd = x - (vel.x * dt * velScale * inv_Lx);
+        float y_fwd = y - (vel.z * dt * velScale * inv_Ly);
+
+        float ufwd = x_fwd/((float)width);
+        float vfwd = y_fwd/((float)height);
+
+        float2 vel_fwd = FlowMap.SampleLevel(SrcSampler, float2(ufwd,vfwd),0).rg;
+       
+        vel = float4((vel_fwd.r - 0.5f)*2.0f, (vel_fwd.g - 0.5f)*2.0f,0.0f,0.0f);
+        float x_bkwd = x_fwd + (vel_fwd.x * dt * velScale * inv_Lx);
+        float y_bkwd = y_fwd + (vel_fwd.y * dt * velScale * inv_Ly);
+
+        float error_x = 0.5f * (x - x_bkwd);
+        float error_y = 0.5f * (y - y_bkwd);
+
+        float x_mm = x_fwd + error_x;
+        float y_mm = y_fwd + error_y;
+
+        float u1_mm = x_mm/((float)width);
+        float v1_mm = y_mm/((float)height);
+
+        //SL_Advection 
+        /*float u0 = i/((float)width);
         float v0 = j/((float)height);
         float4 vel = 0.0f;
         float4 flowSample = FlowMap.SampleLevel(SrcSampler, float2(u0,v0), 0); // takes the R and G values
         //vel = float4(100.0f,0.0f,0.0f,0.0f);
         vel = float4((flowSample.r - 0.5f)*2.0f, (flowSample.g - 0.5f) * 2.0f, 0.0f,0.0f);
         // TODO: Need to include dx,dy and Lx,Ly in calculation
-        float x = i - (vel.r * CSVariables.deltaTime * velScale / m_Lx);
-        float y = j - (vel.g * CSVariables.deltaTime * velScale / m_Ly);
+        float x = i - (vel.r * CSVariables.deltaTime * velScale) ;
+        float y = j - (vel.g * CSVariables.deltaTime * velScale) ;
 
-        if (x < 0) x = 0.5; if (x >= width) x = width-0.5;
-        if (y < 0) y = 0.5; if (y >= height) y = height-0.5;
+       // if (x < 0) x = 0.5; if (x >= width) x = width-0.5;
+        //if (y < 0) y = 0.5; if (y >= height) y = height-0.5;
 
         float u1 = x/((float)width);
         float v1 = y/((float)height);
-
-         value = SrcTexture.SampleLevel(SrcSampler, float2(u1,v1),0);
+        */
+         value = SrcTexture.SampleLevel(SrcSampler, float2(u1_mm,v1_mm),0);
          //value = vel;
     }
     else
@@ -222,6 +258,7 @@ Texture2D<float4> RO_Ht_PHIt;
 
 RWTexture2D<float4> dx_dy;
 RWTexture2D<float4> dPhix_dPhiy;
+RWTexture2D<float4> dHx_dHy;
 
 #define PI 3.1415926535897932f
 uint genGrad;
@@ -260,6 +297,8 @@ void GenGradCS(uint3 ThreadId : SV_DispatchThreadID)
     if (float(j) <= height/2.0) ky = j * dky;
     else ky = (j - height) * dky;
 
+    //ky = ((-height / 2.0) + j) * dky;
+    //kx = ((-width / 2.0) + i) * dkx;
     //kx = ThreadId.x - m_Lx * 0.5f;
     //ky = ThreadId.y - m_Ly * 0.5f;
 
@@ -269,8 +308,8 @@ void GenGradCS(uint3 ThreadId : SV_DispatchThreadID)
     {
         unit_k = 1.0/sqrt(sqr_k);
     }
-    kx *= unit_k;
-    ky *= unit_k; 
+    float kx1 = kx * unit_k;
+    float ky1= ky * unit_k; 
 
     
     //calcNonLinear = false;
@@ -278,8 +317,9 @@ void GenGradCS(uint3 ThreadId : SV_DispatchThreadID)
 
     if(calcNonLinear)
     {
-        float2 dPhiX = float2(-phi.y * kx, phi.x * kx);
-        float2 dPhiY = float2(-phi.y * ky, phi.x * ky);
+        //rotated by PI/2. i(imaginary component) in fourier space is rotation by PI/2. Hence i*(a,b) becomes (-b,a).
+        float2 dPhiX = float2(-phi.y * kx1, phi.x * kx1);
+        float2 dPhiY = float2(-phi.y * ky1, phi.x * ky1);
         
         dPhix_dPhiy[ThreadId.xy] = float4(dPhiX, dPhiY);
     }
@@ -288,10 +328,14 @@ void GenGradCS(uint3 ThreadId : SV_DispatchThreadID)
     if(genGrad)
     {   
         //rotated by -PI/2. -i(imaginary component) in fourier space is rotation by -PI/2. Hence -i*(a,b) becomes (b,-a).
-        float2 dx = float2(Ht.y * kx, -Ht.x * kx);
-        float2 dy = float2(Ht.y * ky, -Ht.x * ky);
+        float2 dx = float2(Ht.y * kx1, -Ht.x * kx1);
+        float2 dy = float2(Ht.y * ky1, -Ht.x * ky1);
 
         dx_dy[ThreadId.xy] = float4(dx,dy);
+
+        float2 dHx = float2(-Ht.y * kx1, Ht.x * kx1);
+        float2 dHy = float2(-Ht.y * ky1, Ht.x * ky1);
+        dHx_dHy[ThreadId.xy]= float4(dHx,dHy);
     }
 }
 
@@ -304,9 +348,11 @@ Texture2D<float4> SrcTexture;
 Texture2D<float4> ObsTexture;
 Texture2D<float4> dPhix_dPhiy;
 Texture2D<float4> dx_dy;
+Texture2D<float4> SrcdHx_dHy;
 SamplerState dPhiSampler;
 
 RWTexture2D<float4> DstTexture;
+RWTexture2D<float4> DstGradTexture;
 RWStructuredBuffer<float4> h0_phi0_RW;
 
 
@@ -320,49 +366,107 @@ float m_Ly;
 void ApplyFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
 {
     int width, height;
-
+    float dt = CSVariables.deltaTime;
     SrcTexture.GetDimensions(width, height);
     int idx = ThreadId.x  + ThreadId.y * width;
     float4 obstructedSrc = SrcTexture[ThreadId.xy];
     float4 obs_dx_dy = dx_dy[ThreadId.xy];
     float4 obs_phiX_phiY = dPhix_dPhiy[ThreadId.xy];
+    float4 dPhi = dPhix_dPhiy[ThreadId.xy];
+    float4 dH = SrcdHx_dHy[ThreadId.xy];
 
+    float inv_Lx = 1.0/m_Lx;
+    float inv_Ly = 1.0/m_Ly;
     if (bUseNonLinear)
     {
-        float i = ((float)ThreadId.x);
-        float j = ((float)ThreadId.y);
+        float i = ((float)ThreadId.x) + 0.5;
+        float j = ((float)ThreadId.y) + 0.5;
 
+        //Modified Macormac Advection
+        float x = i;
+        float y = j;
+
+        float x_fwd = x - dPhi.x * dt * inv_Lx;
+        float y_fwd = y - dPhi.z * dt * inv_Ly;
+
+        float ufwd = x_fwd/((float)width);
+        float vfwd = y_fwd/((float)height);
+
+        float2 vel_fwd = dPhix_dPhiy.SampleLevel(dPhiSampler, float2(ufwd,vfwd),0);
+        
+        float x_bkwd = x_fwd + vel_fwd.x * dt * inv_Lx;
+        float y_bkwd = y_fwd + vel_fwd.y * dt * inv_Ly;
+
+        float error_x = 0.5f * (x - x_bkwd);
+        float error_y = 0.5f * (y - y_bkwd);
+
+        float x_mm = x_fwd + error_x;
+        float y_mm = y_fwd + error_y;
+
+        float u1_mm = x_mm/((float)width);
+        float v1_mm = y_mm/((float)height);
+
+        float2 HSample = SrcTexture.SampleLevel(dPhiSampler, float2(u1_mm,v1_mm),0).rg;
+        
+        obs_dx_dy = dx_dy.SampleLevel(dPhiSampler, float2(u1_mm,v1_mm),0);
+
+
+        x_fwd = x - (dPhi.x * 0.5 * dt * inv_Lx);
+        y_fwd = y - (dPhi.z * 0.5 * dt * inv_Ly);
+
+        ufwd = x_fwd/((float)width);
+        vfwd = y_fwd/((float)height);
+
+        vel_fwd = dPhix_dPhiy.SampleLevel(dPhiSampler, float2(ufwd,vfwd),0);
+        
+        x_bkwd = x_fwd + vel_fwd.x * 0.5 * dt * inv_Lx;
+        y_bkwd = y_fwd + vel_fwd.y * 0.5 * dt * inv_Ly;
+
+        error_x = 0.5f * (x - x_bkwd);
+        error_y = 0.5f * (y - y_bkwd);
+
+        x_mm = x_fwd + error_x;
+        y_mm = y_fwd + error_y;
+
+        float u2_mm = x_mm/((float)width);
+        float v2_mm = y_mm/((float)height);
+
+        float2 phiSample = SrcTexture.SampleLevel(dPhiSampler, float2(u2_mm,v2_mm),0).ba;
+        //SL Advection
+        /*
         float u0 = i/((float)width);
         float v0 = j/((float)height);
         float4 vel = 0.0f;
-        float4 dPhi = dPhix_dPhiy.SampleLevel(dPhiSampler, float2(u0,v0), 0); // takes the R and G values
+        
         //vel = float4(100.0f,0.0f,0.0f,0.0f);
         vel = float4((dPhi.r), (dPhi.b), 0.0f,0.0f);
         // TODO: Need to include dx,dy and Lx,Ly in calculation
-        float xH = i - (vel.r * CSVariables.deltaTime * advScale / m_Lx);
-        float yH = j - (vel.g * CSVariables.deltaTime * advScale / m_Ly);
+        float xH = i - (vel.r * CSVariables.deltaTime );
+        float yH = j - (vel.g * CSVariables.deltaTime );
 
-        if (xH < 0) xH = 0.5; if (xH >= width) xH = width - 0.5;
-        if (yH < 0) yH = 0.5; if (yH >= height) yH = height - 0.5;
+        if (xH < 0) xH = 0; if (xH >= width) xH = width;
+        if (yH < 0) yH = 0; if (yH >= height) yH = height;
 
         float u1 = xH/((float)width);
         float v1 = yH/((float)height);
 
-        float xPhi = i - (vel.r * CSVariables.deltaTime * advScale / m_Lx)*0.5;
-        float yPhi = j - (vel.g * CSVariables.deltaTime * advScale / m_Ly)*0.5;
+        float xPhi = i - (vel.r * CSVariables.deltaTime*0.5);
+        float yPhi = j - (vel.g * CSVariables.deltaTime*0.5);
         
-        if (xPhi < 0) xPhi = 0.5; if (xPhi >= width) xPhi = width - 0.5 ;
-        if (yPhi < 0) yPhi = 0.5; if (yPhi >= height) yPhi = height - 0.5 ;
+       // if (xPhi < 0) xPhi = 0.5; if (xPhi >= width) xPhi = width - 0.5 ;
+       // if (yPhi < 0) yPhi = 0.5; if (yPhi >= height) yPhi = height - 0.5 ;
 
         float u2 = xPhi/((float)width);
         float v2 = yPhi/((float)height);
 
         float2 HSample = SrcTexture.SampleLevel(dPhiSampler, float2(u1,v1),0).rg;
         float2 phiSample = SrcTexture.SampleLevel(dPhiSampler, float2(u2,v2),0).ba;
-        obstructedSrc = float4(HSample.r, HSample.g, phiSample.r, phiSample.g);
-        obs_dx_dy = dx_dy.SampleLevel(dPhiSampler, float2(u1,v1),0);
-        //value = vel;
+        */
 
+        obstructedSrc = float4(HSample.r, HSample.g, phiSample.r, phiSample.g);
+        
+        //value = vel;
+        
     }
 
     if (bUseObsTexture)
@@ -370,7 +474,7 @@ void ApplyFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
         float4 obsVal = -ObsTexture[ThreadId.xy] * obstructedSrc;
         obstructedSrc += obsVal;
 
-        float obsGradVal = -ObsTexture[ThreadId.xy] * dx_dy[ThreadId.xy];
+        float obsGradVal = -ObsTexture[ThreadId.xy] * obs_dx_dy;
         obs_dx_dy += obsGradVal;
     }
 
@@ -378,9 +482,12 @@ void ApplyFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
     float bound = boundaryConditions(ThreadId.x, ThreadId.y, width * 1.0, height * 1.0);
     float4 value = 0.0f;
 
-    value = float4(obs_dx_dy.r* bound, obs_dx_dy.b* bound, obstructedSrc.r* bound, 1.0f) ;
+    value = float4(obs_dx_dy.r* bound, obs_dx_dy.b* bound, obstructedSrc.r* bound, 1.0f);
     DstTexture[ThreadId.xy] = value;
+    DstGradTexture[ThreadId.xy]= float4(dH.x,dH.z,dPhi.x,dPhi.z);
+    
     h0_phi0_RW[idx] = obstructedSrc * bound;
+
 }
 
 #endif //APPLY_FIELDS

@@ -192,7 +192,7 @@ void ACSTestSim::LoadHeightMapSource(
 		//FlushRenderingCommands();
 		//UE_LOG(ComputeLog, Warning, TEXT("Compute Shader Executed."));
 		
-		testDisplayShader->ExecuteDisplayShader(RenderTarget2Display, NormalMapRenderTarget, testComputeShader->GetTexture(), EWaveConfig);
+		testDisplayShader->ExecuteDisplayShader(RenderTarget2Display, NormalMapRenderTarget, GradMapRenderTarget, testComputeShader->GetTexture(), testComputeShader->GetGradTexture(), EWaveConfig);
 		//UE_LOG(ComputeLog, Warning, TEXT("RenderTarget Generated."));
 			
 	}

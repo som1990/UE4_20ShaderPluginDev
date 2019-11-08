@@ -97,7 +97,7 @@ void GenGradFoldingPS(
     //float2 Dx = (displace_right.xy - displace_left.xy) * choppy * DispPerFrame.dx;
     float2 Dx = (displace_right.xy - displace_left.xy) * choppyness * L_x;
     //float2 Dy = (displace_front.xy - displace_back.xy) * choppy * DispPerFrame.dy;
-    float2 Dy = (displace_front.xy - displace_back.xy) * choppyness * L_x;
+    float2 Dy = (displace_front.xy - displace_back.xy) * choppyness * L_y;
     float J = (1.0f + Dx.x)* (1.0f + Dy.y) - Dx.y * Dy.x;
 
     float fold = max(1.0f - J, 0);
@@ -106,3 +106,18 @@ void GenGradFoldingPS(
 }
 
 #endif //NORMAL_MAP
+
+#ifdef DISPLAY_GRAD
+Texture2D<float4> SrcGradParm;
+SamplerState SrcTexSampler;
+
+void DisplayGradMapPS(
+    in float2 InUV: TEXCOORD0,
+    out float4 OutColor : SV_Target0
+    )
+{
+    float4 outValue = SrcGradParm.Sample(SrcTexSampler, InUV.xy);
+    OutColor = float4(outValue.r*2*3.14/10.0f, outValue.g*3.14/10.0f, outValue.b, outValue.a);
+}
+
+#endif //DISPLAY_GRAD

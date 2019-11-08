@@ -11,11 +11,15 @@ FDisplayShaderExecute::FDisplayShaderExecute(int sizeX, int32 sizeY, ERHIFeature
 
 	bIsPixelShaderExecuting = false;
 	bMustRegenerateSRV = false;
+	bMustRegenerateGradSRV = false;
 	bisUnloading = false;
 
 	CurrentTexture = NULL;
 	CurrentRenderTarget = NULL;
 	TextureParameterSRV = NULL;
+	GradParameter = NULL;
+	CurGradTexture = NULL;
+	GradParameterSRV = NULL;
 	CurNormMapRT = NULL;
 	CurNormalTexture = NULL;
 
@@ -38,15 +42,15 @@ FDisplayShaderExecute::~FDisplayShaderExecute()
 DECLARE_GPU_STAT_NAMED(SIM_Display, TEXT("SIM_RTDisplay"));
 
 void FDisplayShaderExecute::ExecuteDisplayShader(
-	UTextureRenderTarget2D* RenderTarget, UTextureRenderTarget2D* NormMapRT, 
-	FTexture2DRHIRef InputTexture, const FEWaveData &eWaveData)
+	UTextureRenderTarget2D* RenderTarget, UTextureRenderTarget2D* NormMapRT, UTextureRenderTarget2D* GradMapRT,
+	FTexture2DRHIRef InputTexture, FTexture2DRHIRef InGradTexture, const FEWaveData &eWaveData)
 	
 {
 	check(IsInGameThread());
 
 	if (bisUnloading || bIsPixelShaderExecuting)
 		return;
-	if (!RenderTarget || !NormMapRT)
+	if (!RenderTarget || !NormMapRT )
 		return;
 
 	bIsPixelShaderExecuting = true;
@@ -57,9 +61,20 @@ void FDisplayShaderExecute::ExecuteDisplayShader(
 		TextureParameter = NULL;
 		bMustRegenerateSRV = true;
 	}
+	
+	if (GradParameter != InGradTexture)
+	{
+		GradParameter.SafeRelease();
+		GradParameter = NULL;
+		bMustRegenerateGradSRV = true;
+	}
+	
 	CurrentRenderTarget = RenderTarget;
 	CurNormMapRT = NormMapRT;
+	CurGradMapRT = GradMapRT;
+
 	TextureParameter = InputTexture;
+	GradParameter = InGradTexture;
 
 	m_PSVariableParm.choppyness = eWaveData.choppyScale;
 	m_PSVariableParm.dx = eWaveData.SimGridSize.X / (1.0f*eWaveData.TexMapSize.X);
@@ -87,6 +102,17 @@ void FDisplayShaderExecute::ExecuteDisplayShader(
 			MyShader->ExecuteNormalRT_RenderThread(RHICmdList);
 		}
 	);
+
+	if (GradMapRT)
+	{
+		ENQUEUE_RENDER_COMMAND(GradDisplay)(
+			[MyShader](FRHICommandListImmediate& RHICmdList)
+		{
+			SCOPED_GPU_STAT(RHICmdList, SIM_Display);
+			MyShader->ExecuteGrad_RenderThread(RHICmdList);
+		}
+		);
+	}
 	bIsPixelShaderExecuting = false;
 }
 
@@ -217,3 +243,60 @@ void FDisplayShaderExecute::ExecuteNormalRT_RenderThread(FRHICommandListImmediat
 	RHICmdList.GenerateMips(CurNormMapRT->GetRenderTargetResource()->TextureRHI);
 }
 
+void FDisplayShaderExecute::ExecuteGrad_RenderThread(FRHICommandListImmediate &RHICmdList)
+{
+	check(IsInRenderingThread());
+	if (bisUnloading)
+	{
+		if (NULL != GradParameterSRV)
+		{
+			GradParameterSRV.SafeRelease();
+			GradParameterSRV = NULL;
+		}
+		return;
+	}
+
+	if (bMustRegenerateGradSRV)
+	{
+		bMustRegenerateGradSRV = false;
+
+		if (NULL != GradParameterSRV)
+		{
+			GradParameterSRV.SafeRelease();
+			GradParameterSRV = NULL;
+		}
+
+		GradParameterSRV = RHICreateShaderResourceView(GradParameter, 0);
+	}
+
+	TShaderMapRef<FMyQuadVS> VertexShader(GetGlobalShaderMap(FeatureLevel));
+	TShaderMapRef<FMyDisplayGradPS> PixelShader(GetGlobalShaderMap(FeatureLevel));
+
+	//FEWavePSVariableParameterRef dispParameter = FEWavePSVariableParameterRef::CreateUniformBufferImmediate(m_PSVariableParm, UniformBuffer_SingleFrame);
+
+	CurGradTexture = CurGradMapRT->GetRenderTargetResource()->GetRenderTargetTexture();
+	SetRenderTarget(RHICmdList, CurGradTexture, FTexture2DRHIRef());
+
+	FGraphicsPipelineStateInitializer PSOInitializer;
+	RHICmdList.ApplyCachedRenderTargets(PSOInitializer);
+
+	PSOInitializer.PrimitiveType = PT_TriangleStrip;
+	PSOInitializer.BoundShaderState.VertexDeclarationRHI = GQuadVertexDeclaration.VertexDeclarationRHI;
+	PSOInitializer.BoundShaderState.VertexShaderRHI = GETSAFERHISHADER_VERTEX(*VertexShader);
+	PSOInitializer.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*PixelShader);
+	PSOInitializer.BlendState = TStaticBlendState<>::GetRHI();
+	PSOInitializer.RasterizerState = TStaticRasterizerState<>::GetRHI();
+	PSOInitializer.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
+
+
+	SetGraphicsPipelineState(RHICmdList, PSOInitializer);
+
+	PixelShader->SetParameters(RHICmdList,GradParameter);
+	//PixelShader->SetUniformBuffers(RHICmdList, dispParameter);
+
+	DrawPrimitiveUP(RHICmdList, PT_TriangleStrip, 2, m_pQuadVB, sizeof(m_pQuadVB[0]));
+
+	PixelShader->UnbindBuffers(RHICmdList);
+
+	RHICmdList.GenerateMips(CurNormMapRT->GetRenderTargetResource()->TextureRHI);
+}
