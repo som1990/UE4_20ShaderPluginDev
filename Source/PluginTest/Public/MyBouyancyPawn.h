@@ -2,12 +2,10 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "CoreUObject.h"
 #include "Engine.h"
-#include "RenderCore.h"
-#include "RHICommandList.h"
+
 #include "ShaderParameterUtils.h"
-#include "RHIStaticStates.h"
 #include "GameFramework/Pawn.h"
 #include "MyBouyancyPawn.generated.h"
 
@@ -26,6 +24,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "HeightMap | Update")
 	void UpdateBuffer();
 
+	
+
 	UFUNCTION(BlueprintCallable, Category = "HeightMap | Texture Helper")
 	FColor GetRenderTargetValue(float x, float y, FVector2D gridSize);
 
@@ -33,6 +33,11 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
+	
+	void ReadPixels();
+	void CheckFence();
+	void StopReading();
+	bool IsFinishedReading();
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -42,5 +47,12 @@ public:
 
 private:
 	TArray<FColor> ColorBuffer;
-	
+	TArray<FColor> ResultBuffer;
+	bool StartReadingPixels = false;
+	FRenderCommandFence* ReadPixelsFence;
+	FRenderTarget* RenderResource;
+	FTimerHandle PollingHandle;
+	int32 SeekY;
+	int32 SizeY;
+	FColor OldColor;
 };

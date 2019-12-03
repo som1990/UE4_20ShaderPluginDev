@@ -73,7 +73,7 @@ void AddSourceHeightCS(uint3 ThreadId : SV_DispatchThreadID)
     float4 pixColor = float4(output.x,0.0f,0.0f,0.0f)*CSVariables.mag*CSVariables.deltaTime;
     
     //Apply Obstruction Maps
-    h0_phi_RW[idx] += pixColor + obsHeight;
+    h0_phi_RW[idx] += -pixColor + obsHeight;
     
     //Apply Boundary Conditions
     h0_phi_RW[idx] *= bound; 
@@ -194,6 +194,7 @@ void AdvectFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
         float j = ((float)ThreadId.y) + 0.5;
 
         //Modified Macormac Advection
+       /*
         float x = i;
         float y = j;
         float u = x/((float)width);
@@ -221,9 +222,9 @@ void AdvectFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
 
         float u1_mm = x_mm/((float)width);
         float v1_mm = y_mm/((float)height);
-
+        */
         //SL_Advection 
-        /*float u0 = i/((float)width);
+        float u0 = i/((float)width);
         float v0 = j/((float)height);
         float4 vel = 0.0f;
         float4 flowSample = FlowMap.SampleLevel(SrcSampler, float2(u0,v0), 0); // takes the R and G values
@@ -238,9 +239,9 @@ void AdvectFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
 
         float u1 = x/((float)width);
         float v1 = y/((float)height);
-        */
-         value = SrcTexture.SampleLevel(SrcSampler, float2(u1_mm,v1_mm),0);
-         //value = vel;
+        
+        value = SrcTexture.SampleLevel(SrcSampler, float2(u1,v1),0);
+        //value = vel;
     }
     else
     {

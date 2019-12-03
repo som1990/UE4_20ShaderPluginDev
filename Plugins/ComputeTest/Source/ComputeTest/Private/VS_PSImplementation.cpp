@@ -2,6 +2,8 @@
 #include "ComputeTestPrivatePCH.h"
 #include "Public/RHIStaticStates.h"
 #include "Public/PipelineStateCache.h"
+#include "Stats2.h"
+#include "Public/SceneUtils.h"
 
 TGlobalResource<FQuadVertexDeclaration> GQuadVertexDeclaration;
 
