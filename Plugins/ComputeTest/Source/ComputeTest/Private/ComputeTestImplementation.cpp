@@ -3,16 +3,15 @@
 #include "GPUFFTCS.h"
 #include "Public/RHIStaticStates.h"
 #include "Public/PipelineStateCache.h"
-#include "Public/Stats/Stats2.h"
-#include "Public/SceneUtils.h"
+//#include "Public/Stats/Stats2.h"
+//#include "Public/SceneUtils.h"
 
 
 #define NUM_THREADS_PER_GROUP 32
 DECLARE_LOG_CATEGORY_EXTERN(InternalShaderLog, Log, All);
 DEFINE_LOG_CATEGORY(InternalShaderLog);
+DECLARE_GPU_STAT_NAMED(SIM_Total, TEXT("SIM_Total"));
 
-//DECLARE_STATS_GROUP(TEXT("SIM"), STATGROUP_SIM, STATCAT_Advanced);
-//DECLARE_CYCLE_STAT(TEXT("Total SimTime"), STAT_TotSimTime, STATGROUP_SIM);
 
 
 
@@ -316,7 +315,7 @@ void FComputeTestExecute::ClearInternalData()
 
 
 
-DECLARE_GPU_STAT_NAMED(SIM_Total, TEXT("SIM_Total"));
+
 void FComputeTestExecute::ExecuteComputeShader(
 	UTextureRenderTarget2D* inputRenderTarget, FTexture2DRHIRef inputTexture, 
 	FTexture2DRHIRef _obsTexture, FTexture2DRHIRef _flowMap, 
@@ -382,19 +381,17 @@ void FComputeTestExecute::ExecuteComputeShader(
 			if (rtInput->bUseRenderTarget)
 			{
 				rtTexture = rtInput->inputRT->GetRenderTargetResource()->GetRenderTargetTexture();
-				if (MyShader->InputTexture != rtTexture)
-				{
-					MyShader->bMustRegenerateSRV = true;
-				}
+				
+				MyShader->bMustRegenerateSRV = true;
+				
 				MyShader->InputTexture = rtTexture;
 				
 			}
 			else
 			{
-				if (MyShader->InputTexture != rtInput->inTexture)
-				{
-					MyShader->bMustRegenerateSRV = true;
-				}
+				
+				MyShader->bMustRegenerateSRV = true;
+				
 				MyShader->InputTexture = rtInput->inTexture;
 			}
 
@@ -443,7 +440,7 @@ void FComputeTestExecute::ExecuteComputeShader(
 			//SCOPE_CYCLE_COUNTER(SIM_ForwardFFT);
 
 			//SCOPED_GPU_STAT(RHICmdList, SIM_ForwardFFT);
-			SCOPED_GPU_STAT(RHICmdList, SIM_Total);
+			//SCOPED_GPU_STAT(RHICmdList, SIM_Total);
 
 			if (SuccessInput)
 			{
@@ -459,7 +456,7 @@ void FComputeTestExecute::ExecuteComputeShader(
 			//SCOPE_CYCLE_COUNTER(SIM_CalcEWave);
 
 			//SCOPED_GPU_STAT(RHICmdList, SIM_CalcEWave);
-			SCOPED_GPU_STAT(RHICmdList, SIM_Total);
+			//SCOPED_GPU_STAT(RHICmdList, SIM_Total);
 
 			
 			if (SuccessInput)
@@ -507,10 +504,10 @@ void FComputeTestExecute::ExecuteComputeShader(
 			
 			if (advectVars->bUseFlowMap)
 			{
-				if (MyShader->FlowTexture != advectVars->_flowMap)
-				{
-					MyShader->bMustRegenerateFlowSRV = true;
-				}
+				
+				
+				MyShader->bMustRegenerateFlowSRV = true;
+				
 				MyShader->FlowTexture = advectVars->_flowMap;
 			}
 
@@ -598,6 +595,7 @@ void FComputeTestExecute::ExecuteComputeShader(
 			}
 		}
 		);
+		/*
 		ENQUEUE_RENDER_COMMAND(InverseFFTdH)(
 			[MyShader, &SuccessInput](FRHICommandListImmediate& RHICmdList)
 		{
@@ -609,6 +607,7 @@ void FComputeTestExecute::ExecuteComputeShader(
 			}
 		}
 		);
+		*/
 	}
 
 	ENQUEUE_RENDER_COMMAND(ApplyFields)(
@@ -641,7 +640,7 @@ void FComputeTestExecute::ExecuteComputeShader(
 				RHICmdList,1.0, MyShader->TransitionTextureSRV, 
 				MyShader->DxDyTextureSRV, MyShader->DvxDvyTextureSRV, MyShader->ObsTextureSRV, MyShader->dHx_dHyTextureSRV,
 				MyShader->h0_phi0_UAV, MyShader->OutTextureUAV, MyShader->OutGradTextureUAV);
-			RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, MyShader->OutTextureUAV);
+			//RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, MyShader->OutTextureUAV);
 		}
 	}
 	);

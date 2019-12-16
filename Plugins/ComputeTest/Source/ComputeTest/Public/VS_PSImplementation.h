@@ -3,6 +3,8 @@
 #include "Engine.h"
 #include "EWaveParm.h"
 #include "CSShaders.h"
+#include "Public/SceneUtils.h"
+
 
 
 class COMPUTETEST_API FDisplayShaderExecute

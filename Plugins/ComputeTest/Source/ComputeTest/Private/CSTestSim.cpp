@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "CSTestSim.h"
-#include "Public/Stats/Stats2.h"
+//#include "Public/Stats/Stats2.h"
 #include "Public/SceneUtils.h"
 DECLARE_LOG_CATEGORY_EXTERN(ComputeLog, Log, All);
 DEFINE_LOG_CATEGORY(ComputeLog);

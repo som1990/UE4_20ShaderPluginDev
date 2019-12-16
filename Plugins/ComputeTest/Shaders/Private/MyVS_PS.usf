@@ -43,8 +43,9 @@ void MainPS(
 	uint index_y = (uint)(InUV.y * (float)height);
 
     int signCorrection = ((index_x + index_y) & 1) ? -1 : 1;
-    float3 packedValue = TextureParameter.Sample(TexMapSampler, InUV).xyz;
-    OutColor = float4(-packedValue.x*choppyness*2.0*PI/L_x, -packedValue.y*choppyness*2.0*PI/L_y, packedValue.z, 1.0);
+    //float3 packedValue = TextureParameter.Sample(TexMapSampler, InUV).xyz;
+    float4 packedValue = TextureParameter[int2(index_x,index_y)];
+    OutColor = float4(packedValue.x*choppyness * PI * 2.0/L_x, packedValue.y*choppyness* PI * 2.0/L_y, packedValue.z, 1.0);
 }
 
 #endif //DISP_MAP
@@ -66,7 +67,7 @@ void GenGradFoldingPS(
 {
     uint width, height;
     SrcTexParm.GetDimensions(width,height);
-    
+    //float2 tc_center = float2(InUV.x, InUV.y);
     
     float2 one_texel = float2(1.0f/ (float)width, 1.0f/ (float)height);
 
@@ -87,17 +88,17 @@ void GenGradFoldingPS(
 
     float3 displaceCenter = SrcTexParm.Sample(SrcTexSampler,InUV.xy).rgb;
     //TODO: Multiply GridLength.
-    float2 gradient = {-(displace_right.b - displace_left.b), -(displace_front.b - displace_back.b)};
-    //float2 gradient = {-(displaceCenter.x), -(displaceCenter.y)};
+    float2 gradient = {-(displace_right.b - displace_left.b)*choppyness * PI * 2.0/L_x, -(displace_front.b - displace_back.b)*choppyness* PI * 2.0/L_y};
+    //float2 gradient = {-displaceCenter.r, -displaceCenter.g};
 
     float m_x = L_x/((float)width);
     float m_y = L_y/((float)height);
 
     //Variable parameters providing heavy memory leaks. Ask Epic why?
     //float2 Dx = (displace_right.xy - displace_left.xy) * choppy * DispPerFrame.dx;
-    float2 Dx = (displace_right.xy - displace_left.xy) * choppyness * L_x;
+    float2 Dx = (displace_right.xy - displace_left.xy);
     //float2 Dy = (displace_front.xy - displace_back.xy) * choppy * DispPerFrame.dy;
-    float2 Dy = (displace_front.xy - displace_back.xy) * choppyness * L_y;
+    float2 Dy = (displace_front.xy - displace_back.xy);
     float J = (1.0f + Dx.x)* (1.0f + Dy.y) - Dx.y * Dy.x;
 
     float fold = max(1.0f - J, 0);

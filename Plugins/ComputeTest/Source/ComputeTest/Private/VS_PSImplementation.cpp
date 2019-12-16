@@ -2,8 +2,11 @@
 #include "ComputeTestPrivatePCH.h"
 #include "Public/RHIStaticStates.h"
 #include "Public/PipelineStateCache.h"
-#include "Stats2.h"
-#include "Public/SceneUtils.h"
+//#include "Stats2.h"
+//#include "Public/SceneUtils.h"
+
+
+DECLARE_GPU_STAT_NAMED(SIM_Display, TEXT("SIM_RTDisplay"));
 
 TGlobalResource<FQuadVertexDeclaration> GQuadVertexDeclaration;
 
@@ -41,7 +44,6 @@ FDisplayShaderExecute::~FDisplayShaderExecute()
 	bisUnloading = true;
 }
 
-DECLARE_GPU_STAT_NAMED(SIM_Display, TEXT("SIM_RTDisplay"));
 
 void FDisplayShaderExecute::ExecuteDisplayShader(
 	UTextureRenderTarget2D* RenderTarget, UTextureRenderTarget2D* NormMapRT, UTextureRenderTarget2D* GradMapRT,
@@ -104,7 +106,7 @@ void FDisplayShaderExecute::ExecuteDisplayShader(
 			MyShader->ExecuteNormalRT_RenderThread(RHICmdList);
 		}
 	);
-
+	/*
 	if (GradMapRT)
 	{
 		ENQUEUE_RENDER_COMMAND(GradDisplay)(
@@ -115,6 +117,7 @@ void FDisplayShaderExecute::ExecuteDisplayShader(
 		}
 		);
 	}
+	*/
 	bIsPixelShaderExecuting = false;
 }
 
