@@ -27,8 +27,8 @@ SamplerState TexMapSampler;
 
 
 float choppyness;
-float L_x;
-float L_y;
+float L_x; // simulation plane size in x
+float L_y; // simulation plane size in y
 
 void MainPS( 
 	in float2 InUV : TEXCOORD0, 
@@ -43,8 +43,8 @@ void MainPS(
 	uint index_y = (uint)(InUV.y * (float)height);
 
     int signCorrection = ((index_x + index_y) & 1) ? -1 : 1;
-    //float3 packedValue = TextureParameter.Sample(TexMapSampler, InUV).xyz;
     float4 packedValue = TextureParameter[int2(index_x,index_y)];
+    //float3 packedValue = TextureParameter.Sample(TexMapSampler, InUV).xyz;
     OutColor = float4(packedValue.x*choppyness * PI * 2.0/L_x, packedValue.y*choppyness* PI * 2.0/L_y, packedValue.z, 1.0);
 }
 
@@ -96,12 +96,15 @@ void GenGradFoldingPS(
 
     //Variable parameters providing heavy memory leaks. Ask Epic why?
     //float2 Dx = (displace_right.xy - displace_left.xy) * choppy * DispPerFrame.dx;
-    float2 Dx = (displace_right.xy - displace_left.xy);
     //float2 Dy = (displace_front.xy - displace_back.xy) * choppy * DispPerFrame.dy;
-    float2 Dy = (displace_front.xy - displace_back.xy);
+    // J_neg = 0.5 * (1+Dx.x + 1 + Dy.y - sqrt((Dx.x-Dy.y)*(Dx.x-Dy.y) + 4*Dx.y*Dx.y));
+    //float fold = max(1.0f - J_neg,0)
+    
+    float2 Dx = 0.5 * (displace_right.xy - displace_left.xy);
+    float2 Dy = 0.5 * (displace_front.xy - displace_back.xy);
     float J = (1.0f + Dx.x)* (1.0f + Dy.y) - Dx.y * Dy.x;
-
-    float fold = max(1.0f - J, 0);
+     
+    float fold = max(min(1.0f - J,1.0f), 0);
 
     OutColor = float4(gradient,0.f,fold);
 }

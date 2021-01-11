@@ -53,10 +53,12 @@ float m_Ly;
 [numthreads(THREADS_PER_GROUP,THREADS_PER_GROUP,1)]
 void AddSourceHeightCS(uint3 ThreadId : SV_DispatchThreadID)
 {
+    
     float4 dstpixel = MyColor;
     
     int width, height;
     SrcTexture.GetDimensions(width, height);
+    if ((ThreadId.x >= width) || (ThreadId.y >= height)) { return; }
     uint idx = ThreadId.x  + ThreadId.y * width;
     
     //Calculate boundary conditions
@@ -71,7 +73,7 @@ void AddSourceHeightCS(uint3 ThreadId : SV_DispatchThreadID)
     float2 uv = float2(ThreadId.xy)/ float2(width * 1.0f, height *1.0f);
     float4 output = SrcTexture[ThreadId.xy];
     float4 selfMask = (float)clamp(SrcTexture[ThreadId.xy].r,0.0,1.0) * -h0_phi_RW[idx];
-    float4 pixColor = float4(output.x,0.0f,0.0f,0.0f)*CSVariables.mag*CSVariables.deltaTime;
+    float4 pixColor = float4(output.x,0.0f,0.0f,0.0f) * CSVariables.mag * CSVariables.deltaTime;
     
     //Apply Obstruction Maps
     h0_phi_RW[idx] += -pixColor + obsHeight + selfMask;
@@ -109,12 +111,11 @@ void CalcEWaveCS(uint3 ThreadId : SV_DispatchThreadID)
     float width, height;
     In_hT_pT.GetDimensions(width, height);
     
-    //if ((ThreadId.x >= width) || (ThreadId.y >= height)) { return; }
+    if ((ThreadId.x >= width) || (ThreadId.y >= height)) { return; }
 
     float i = (float)ThreadId.x;
     float j = (float)ThreadId.y;
 
-    //TODO: Need to implement size of Grid in World Size (Lx, Ly)
     float dkx = 2.0 * PI * 1.0/worldGridWidth; 
     float dky = 2.0 * PI * 1.0/worldGridHeight;
 
@@ -125,10 +126,7 @@ void CalcEWaveCS(uint3 ThreadId : SV_DispatchThreadID)
     if (float(j) <= height/2.0) ky = j * dky;
     else ky = (j - height) * dky;
     
-    //ky = (-height / 2.0 + j) * dky;
-    //kx = (-width / 2.0 + i) * dkx;
-    //float n = ThreadId.x - 256.0f;
-    //float m = ThreadId.y - 256.0f;
+    
     uint index = ThreadId.x + ThreadId.y*width;
    
 
@@ -149,7 +147,6 @@ void CalcEWaveCS(uint3 ThreadId : SV_DispatchThreadID)
         pT.x = coswk*ht_pt.b - (GRAV / w) * sinwk * ht_pt.r; // phi.real
         pT.y = coswk*ht_pt.a - (GRAV / w) * sinwk * ht_pt.g; // phi.imag
 
-        //Out_hT_pT[ThreadId.xy] = float4(In_hT_pT[ThreadId.xy].x,In_hT_pT[ThreadId.xy].y, 0.0, 0.0 );
     }
 
     Out_hT_pT[ThreadId.xy] = float4(hT.x,hT.y, pT.x, pT.y);
@@ -181,6 +178,7 @@ void AdvectFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
     float width, height;
 
     SrcTexture.GetDimensions(width, height);
+    if ((ThreadId.x >= width) || (ThreadId.y >= height)) { return; }
     int idx = ThreadId.x  + ThreadId.y * (int)width;
     float inv_Lx = 1.0 /m_Lx;
     float inv_Ly = 1.0 /m_Ly;
@@ -275,6 +273,7 @@ void GenGradCS(uint3 ThreadId : SV_DispatchThreadID)
     float width, height;
 
     RO_Ht_PHIt.GetDimensions(width, height);
+    if ((ThreadId.x >= width) || (ThreadId.y >= height)) { return; }
     int idx = ThreadId.x  + ThreadId.y * width;
 
     float i = (float)ThreadId.x;
@@ -329,7 +328,8 @@ void GenGradCS(uint3 ThreadId : SV_DispatchThreadID)
     
     if(genGrad)
     {   
-        //rotated by -PI/2. -i(imaginary component) in fourier space is rotation by -PI/2. Hence -i*(a,b) becomes (b,-a).
+        //Rotated by -PI/2. -i(imaginary component) in fourier space is rotation by -PI/2. 
+        //Hence -i*(a,b) becomes (b,-a).
         float2 dx = float2(Ht.y * kx1, -Ht.x * kx1);
         float2 dy = float2(Ht.y * ky1, -Ht.x * ky1);
 
@@ -367,9 +367,11 @@ float m_Ly;
 [numthreads(THREADS_PER_GROUP, THREADS_PER_GROUP,1)]
 void ApplyFieldsCS(uint3 ThreadId : SV_DispatchThreadID)
 {
+    
     int width, height;
     float dt = CSVariables.deltaTime;
     SrcTexture.GetDimensions(width, height);
+    if ((ThreadId.x >= width) || (ThreadId.y >= height)) { return; }
     int idx = ThreadId.x  + ThreadId.y * width;
     float4 obstructedSrc = SrcTexture[ThreadId.xy];
     float4 obs_dx_dy = dx_dy[ThreadId.xy];

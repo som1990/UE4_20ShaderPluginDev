@@ -440,7 +440,7 @@ void FComputeTestExecute::ExecuteComputeShader(
 			//SCOPE_CYCLE_COUNTER(SIM_ForwardFFT);
 
 			//SCOPED_GPU_STAT(RHICmdList, SIM_ForwardFFT);
-			//SCOPED_GPU_STAT(RHICmdList, SIM_Total);
+			SCOPED_GPU_STAT(RHICmdList, SIM_Total);
 
 			if (SuccessInput)
 			{
@@ -456,7 +456,7 @@ void FComputeTestExecute::ExecuteComputeShader(
 			//SCOPE_CYCLE_COUNTER(SIM_CalcEWave);
 
 			//SCOPED_GPU_STAT(RHICmdList, SIM_CalcEWave);
-			//SCOPED_GPU_STAT(RHICmdList, SIM_Total);
+			SCOPED_GPU_STAT(RHICmdList, SIM_Total);
 
 			
 			if (SuccessInput)
